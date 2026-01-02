@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 )
@@ -19,7 +20,16 @@ func deepsearchdemo() {
 		fmt.Printf("搜索失败: %v\n", err)
 		return
 	}
-	fmt.Printf("搜索成功:\n%s\n", response.RawResponse)
+
+	fmt.Printf("搜索成功:\n")
+	if len(response.Choices) > 0 {
+		fmt.Printf("AI回复: %s\n", response.Choices[0].Message.Content)
+	}
+	fmt.Printf("请求ID: %s\n", response.RequestID)
+	fmt.Printf("安全检查: %t\n", response.IsSafe)
+	fmt.Printf("Token使用量 - 输入: %d, 输出: %d, 总计: %d\n",
+		response.Usage.PromptTokens, response.Usage.CompletionTokens, response.Usage.TotalTokens)
+	fmt.Printf("参考信息数量: %d\n", len(response.References))
 
 	// 方式2: 使用自定义配置
 	// customOptions := NewDefaultRequest("")
@@ -79,14 +89,53 @@ type BaiduDeepSearchRequest struct {
 
 // ============== 响应相关结构体 ==============
 
+// Message 消息内容结构
+type ResponseMessage struct {
+	Content string `json:"content"`
+	Role    string `json:"role"`
+}
+
+// Choice 选择项结构
+type Choice struct {
+	FinishReason string          `json:"finish_reason"`
+	Index        int             `json:"index"`
+	Message      ResponseMessage `json:"message"`
+}
+
+// Reference 参考信息结构
+type Reference struct {
+	Content   string      `json:"content"`
+	Date      string      `json:"date"`
+	Icon      string      `json:"icon"`
+	ID        int         `json:"id"`
+	Image     interface{} `json:"image"`
+	Title     string      `json:"title"`
+	Type      string      `json:"type"`
+	URL       string      `json:"url"`
+	Video     interface{} `json:"video"`
+	WebAnchor string      `json:"web_anchor"`
+	Website   string      `json:"website"`
+}
+
+// Usage 使用量统计结构
+type Usage struct {
+	CompletionTokens    int `json:"completion_tokens"`
+	PromptTokens        int `json:"prompt_tokens"`
+	PromptTokensDetails struct {
+		CachedTokens int `json:"cached_tokens"`
+	} `json:"prompt_tokens_details"`
+	TotalTokens int `json:"total_tokens"`
+}
+
 // BaiduDeepSearchResponse 百度深度搜索响应
 type BaiduDeepSearchResponse struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	Result  string `json:"result"`
-	// 根据实际响应结构添加更多字段
-	RawResponse string `json:"-"` // 原始响应，不序列化
+	Choices            []Choice    `json:"choices"`
+	IsSafe             bool        `json:"is_safe"`
+	References         []Reference `json:"references"`
+	RequestID          string      `json:"request_id"`
+	SafeClassification string      `json:"safe_classification"`
+	Usage              Usage       `json:"usage"`
+	RawResponse        string      `json:"-"` // 原始响应，不序列化
 }
 
 // ============== 客户端配置 ==============
@@ -227,6 +276,7 @@ func (c *BaiduDeepSearchClient) Search(req *BaiduDeepSearchRequest) (*BaiduDeepS
 
 	// 2. 执行HTTP请求
 	body, err := c.executeRequest(httpReq)
+	log.Println("Response:", string(body))
 	if err != nil {
 		return nil, err
 	}

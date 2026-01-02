@@ -1,9 +1,8 @@
 package http
 
 import (
-	"net/http"
-
 	"lineNews/http/controller"
+	"lineNews/http/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,58 +11,35 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	// CORS，允许从 file:// 等来源访问 http://localhost:8080 的接口
-	r.Use(func(c *gin.Context) {
-		origin := c.Request.Header.Get("Origin")
-		if origin == "" {
-			origin = "*"
-		}
-		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-		c.Next()
-	})
-
 	// 静态前端页面
 	r.Static("/static", "./static")
 	r.GET("/", func(c *gin.Context) {
 		c.File("./static/index.html")
 	})
 
-	// API 路由
+	// API 路由组 - 只对API接口应用限流和CORS中间件
 	api := r.Group("/api")
 	{
-		// 时间链和知识图谱路由
-		api.GET("/timeline", controller.HandleTimeline)
-		api.GET("/graph", controller.HandleGraph)
+		// 在API路由组上应用CORS和限流中间件
+		api.Use(middleware.CORSMiddleware())
+		api.Use(middleware.GlobalRateLimiter.Limit())
 
-		// 健康检查
-		api.GET("/health", controller.HandleHealthCheck)
+		// 基础服务路由
+		api.GET("/health", controller.HandleHealthCheck) // 健康检查
+		api.GET("/timeline", controller.HandleTimeline)  // 时间链
+		api.GET("/graph", controller.HandleGraph)        // 知识图谱
 
 		// 百度深度搜索路由
-		deepSearch := api.Group("/deepsearch")
-		{
-			deepSearch.GET("/search", controller.HandleDeepSearch)        // GET /api/deepsearch/search?query=xxx
-			deepSearch.POST("/custom", controller.HandleDeepSearchCustom) // POST /api/deepsearch/custom
-		}
+		api.GET("/deepsearch/search", controller.HandleDeepSearch)        // GET /api/deepsearch/search?query=xxx
+		api.POST("/deepsearch/custom", controller.HandleDeepSearchCustom) // POST /api/deepsearch/custom
 
 		// 百度百科路由
-		baike := api.Group("/baike")
-		{
-			baike.GET("/search", controller.HandleBaikeSearch)         // GET /api/baike/search?keyword=xxx
-			baike.GET("/lemma", controller.HandleBaikeSearchByLemmaId) // GET /api/baike/lemma?lemma_id=xxx
-		}
+		api.GET("/baike/search", controller.HandleBaikeSearch)         // GET /api/baike/search?keyword=xxx
+		api.GET("/baike/lemma", controller.HandleBaikeSearchByLemmaId) // GET /api/baike/lemma?lemma_id=xxx
 
 		// Ark Chat 路由
-		arkchat := api.Group("/arkchat")
-		{
-			arkchat.GET("/chat", controller.HandleArkChat)         // GET /api/arkchat/chat?message=xxx
-			arkchat.GET("/stream", controller.HandleArkChatStream) // GET /api/arkchat/stream?message=xxx
-		}
+		api.GET("/arkchat/chat", controller.HandleArkChat)         // GET /api/arkchat/chat?message=xxx
+		api.GET("/arkchat/stream", controller.HandleArkChatStream) // GET /api/arkchat/stream?message=xxx
 	}
 
 	return r

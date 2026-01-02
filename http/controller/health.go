@@ -10,10 +10,5 @@ import (
 func HandleHealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",
-		"services": gin.H{
-			"deep_search": "available",
-			"baike":       "available",
-			"ark_chat":    "not_implemented",
-		},
 	})
 }
