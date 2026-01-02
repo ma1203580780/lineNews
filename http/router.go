@@ -14,7 +14,7 @@ func SetupRouter() *gin.Engine {
 	// 静态前端页面
 	r.Static("/static", "./static")
 	r.GET("/", func(c *gin.Context) {
-		c.File("./static/index.html")
+		c.File("./static/main.html")
 	})
 
 	// API 路由组 - 只对API接口应用限流和CORS中间件
