@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8" />
-    <title>新闻检索 - 时间线 & 知识图谱</title>
+    <title>LineNews</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         body {
@@ -21,7 +21,7 @@
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 12px;
         }
         header .title {
             font-size: 18px;
@@ -32,11 +32,15 @@
             display: flex;
             align-items: center;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 12px;
+            flex: 1;
+            min-width: 300px;
         }
         input[type="text"] {
-            padding: 6px 8px;
-            min-width: 220px;
+            padding: 8px 12px;
+            min-width: 200px;
+            flex: 1;
+            max-width: 400px;
             border-radius: 4px;
             border: 1px solid #ccc;
             font-size: 14px;
@@ -249,19 +253,20 @@
             
             .controls {
                 justify-content: center;
-                flex-direction: column;
-                align-items: stretch;
+                flex-direction: row;
+                align-items: center;
+                flex-wrap: wrap;
             }
             
             input[type="text"] {
-                min-width: auto;
-                width: 100%;
-                margin-bottom: 8px;
+                min-width: 150px;
+                flex: 1;
+                margin-bottom: 0;
+                max-width: none;
             }
             
             .controls button {
-                width: 100%;
-                margin-bottom: 4px;
+                margin-bottom: 0;
             }
             
             .hint {
@@ -315,9 +320,15 @@
                 font-size: 16px;
             }
             
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
             input[type="text"] {
                 padding: 8px;
                 font-size: 16px; /* 增大字体便于触摸输入 */
+                margin-bottom: 8px;
             }
             
             button {
@@ -356,14 +367,14 @@
 </head>
 <body>
     <header>
-        <div class="title">新闻检索 - 时间线 & 知识图谱</div>
+        <div class="title">LineNews</div>
         <div class="controls">
-            <input id="keywordInput" type="text" placeholder="输入关键词，例如：人工智能" />
-            <button id="timelineBtn">时间线视图</button>
-            <button id="graphBtn">知识图谱视图</button>
+            <input id="keywordInput" type="text" placeholder="输入新闻关键词，例如：人工智能" />
+            <button id="timelineBtn">时间线</button>
+            <button id="graphBtn">知识图谱</button>
         </div>
     </header>
-    <div class="hint">说明：在上方输入关键词，点击"时间线视图"或"知识图谱视图"按钮获取对应结果。结果将铺满除搜索框外的整个屏幕区域。</div>
+    <div class="hint">说明：在上方输入新闻关键词，点击"时间线"或"知识图谱"按钮获取对应结果。结果将铺满除搜索框外的整个屏幕区域。</div>
 
     <div class="container">
         <div id="resultContainer" class="panel">
@@ -776,7 +787,7 @@
             const input = document.getElementById('keywordInput');
             const keyword = (input.value || '').trim();
             if (!keyword) {
-                alert('请输入关键词后再搜索');
+                alert('请输入新闻关键词后再搜索');
                 return;
             }
             // 清空之前的显示内容
@@ -791,7 +802,7 @@
             const input = document.getElementById('keywordInput');
             const keyword = (input.value || '').trim();
             if (!keyword) {
-                alert('请输入关键词后再搜索');
+                alert('请输入新闻关键词后再搜索');
                 return;
             }
             // 清空之前的显示内容
