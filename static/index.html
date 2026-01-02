@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <title>新闻检索 - 时间线 & 知识图谱</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            background-color: #f5f5f5;
+        }
+        header {
+            padding: 12px 20px;
+            background-color: #1f2d3d;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        header .title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-right: 20px;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        input[type="text"] {
+            padding: 6px 8px;
+            min-width: 220px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+        button {
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #searchBtn {
+            background-color: #409eff;
+            color: #fff;
+        }
+        #searchBtn:hover {
+            background-color: #66b1ff;
+        }
+        .hint {
+            padding: 8px 20px;
+            font-size: 13px;
+            color: #666;
+            background-color: #f0f2f5;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px 10px 14px;
+            height: calc(100vh - 64px);
+            box-sizing: border-box;
+        }
+        .panel {
+            background-color: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .panel-header {
+            padding: 8px 12px;
+            border-bottom: 1px solid #ebeef5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .panel-subtitle {
+            font-size: 12px;
+            color: #909399;
+        }
+        .panel-body {
+            flex: 1;
+            min-height: 0;
+        }
+        #timelineChart,
+        #graphChart {
+            width: 100%;
+            height: 100%;
+        }
+        #timelineChart {
+            overflow-y: auto;
+        }
+        .timeline {
+            position: relative;
+            margin: 0;
+            padding: 24px 24px 24px 56px;
+            box-sizing: border-box;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 28px;
+            top: 16px;
+            bottom: 16px;
+            width: 2px;
+            background: linear-gradient(to bottom, #409eff, #a0cfff);
+        }
+        .timeline-item {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        .timeline-item:last-child {
+            margin-bottom: 0;
+        }
+        .timeline-node {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #fff;
+            border: 3px solid #c0c4cc;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.9);
+        }
+        .timeline-node-latest {
+            border-color: #409eff;
+            box-shadow: 0 0 0 2px rgba(64,158,255,0.3);
+        }
+        .timeline-content {
+            margin-left: 44px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            border: 1px solid #ebeef5;
+        }
+        .timeline-meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: #909399;
+        }
+        .timeline-time,
+        .timeline-location,
+        .timeline-people {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background-color: #f4f4f5;
+        }
+        .timeline-time {
+            background-color: #ecf5ff;
+            color: #409eff;
+            font-weight: 600;
+        }
+        .timeline-time::before {
+            content: '⏱ ';
+        }
+        .timeline-location::before {
+            content: '📍 ';
+        }
+        .timeline-people::before {
+            content: '👤 ';
+        }
+        .timeline-title {
+            display: inline-block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #303133;
+            text-decoration: none;
+            margin: 2px 0 4px;
+        }
+        .timeline-title:hover {
+            color: #409eff;
+            text-decoration: underline;
+        }
+        .timeline-summary {
+            font-size: 13px;
+            color: #606266;
+            line-height: 1.6;
+        }
+        .timeline-empty {
+            padding: 16px;
+            font-size: 13px;
+            color: #909399;
+        }
+        .panels-wrapper {
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+            height: 100%;
+        }
+        @media (min-width: 1200px) {
+            .panels-wrapper {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: 1fr;
+            }
+        }
+    </style>
+    <!-- ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="title">新闻检索 - 时间线 & 知识图谱</div>
+        <div class="controls">
+            <input id="keywordInput" type="text" placeholder="输入关键词，例如：人工智能" />
+            <button id="searchBtn">搜索</button>
+        </div>
+    </header>
+    <div class="hint">说明：在上方输入关键词并点击“搜索”，系统会同时检索并展示两种视图：左/上一块为链式多节点新闻时间线（包含时间、地点、人物），右/下一块为网状知识图谱（事件、人物、地点、主题间的关系）。</div>
+
+    <div class="container">
+        <div class="panels-wrapper">
+            <section class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">时间线视图</div>
+                    <div class="panel-subtitle">按时间顺序展示链式新闻事件</div>
+                </div>
+                <div class="panel-body">
+                    <div id="timelineChart" class="timeline"></div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">知识图谱视图</div>
+                    <div class="panel-subtitle">事件、人物、地点与主题的网状关系</div>
+                </div>
+                <div class="panel-body">
+                    <div id="graphChart"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const timelineContainer = document.getElementById('timelineChart');
+        const graphDom = document.getElementById('graphChart');
+        const graphChart = echarts.init(graphDom);
+        const origin = window.location.origin;
+        const API_BASE = (!origin || origin === 'null' || origin.startsWith('file:')) ? 'http://localhost:8080' : origin;
+
+        async function loadTimeline(keyword) {
+            try {
+                const resp = await fetch(`${API_BASE}/api/timeline?keyword=${encodeURIComponent(keyword)}`);
+                if (!resp.ok) {
+                    throw new Error('网络请求失败');
+                }
+                const data = await resp.json();
+                renderTimeline(data);
+            } catch (err) {
+                console.error(err);
+                timelineContainer.innerHTML = '<div class="timeline-empty">请求时间线数据失败，请确认后端已启动（go run main.go）。</div>';
+            }
+        }
+
+        async function loadGraph(keyword) {
+            try {
+                const resp = await fetch(`${API_BASE}/api/graph?keyword=${encodeURIComponent(keyword)}`);
+                if (!resp.ok) {
+                    throw new Error('网络请求失败');
+                }
+                const data = await resp.json();
+                renderGraph(data);
+            } catch (err) {
+                console.error(err);
+                graphChart.clear();
+                graphChart.setOption({
+                    title: { text: '知识图谱加载失败', left: 'center' },
+                    graphic: [{
+                        type: 'text',
+                        left: 'center',
+                        top: 'middle',
+                        style: {
+                            text: '请求知识图谱数据失败，请确认后端已启动（go run main.go）。',
+                            fill: '#666',
+                            fontSize: 14,
+                        },
+                    }],
+                });
+            }
+        }
+
+        function renderTimeline(data) {
+            const events = (data && data.events) || [];
+            // 清空容器
+            timelineContainer.innerHTML = '';
+
+            if (!events.length) {
+                timelineContainer.innerHTML = '<div class="timeline-empty">暂无时间线数据</div>';
+                return;
+            }
+
+            // 按时间倒序排列（最新在上方）
+            const sortedEvents = events.slice().sort((a, b) => {
+                const parseValue = (v) => {
+                    if (!v) return null;
+                    const d = new Date(v);
+                    if (!isNaN(d.getTime())) {
+                        return { type: 'date', value: d.getTime() };
+                    }
+                    const match = String(v).match(/(\d{4})/);
+                    if (match) {
+                        return { type: 'year', value: parseInt(match[1], 10) };
+                    }
+                    return { type: 'text', value: String(v) };
+                };
+
+                const ta = parseValue(a.time);
+                const tb = parseValue(b.time);
+
+                // 没有时间的事件排在后面
+                if (!ta && !tb) return 0;
+                if (!ta) return 1;
+                if (!tb) return -1;
+
+                // 相同类型按值倒序（最新在上方）
+                if (ta.type === tb.type) {
+                    if (ta.value === tb.value) return 0;
+                    return ta.value < tb.value ? 1 : -1;
+                }
+
+                // 可解析的时间优先，其次是年份，最后是纯文本
+                const typeOrder = { date: 0, year: 1, text: 2 };
+                return typeOrder[ta.type] - typeOrder[tb.type];
+            });
+
+            sortedEvents.forEach((evt, idx) => {
+                const peopleText = (evt.people || []).join('、') || '';
+                const locationText = evt.location || '';
+                const timeText = evt.time || '';
+                const summaryText = evt.summary || '';
+                const url =
+                    evt.url ||
+                    `https://news.example.com/search?q=${encodeURIComponent(evt.title || data.keyword || '')}`;
+
+                const item = document.createElement('div');
+                item.className = 'timeline-item';
+
+                const node = document.createElement('div');
+                node.className = 'timeline-node' + (idx === 0 ? ' timeline-node-latest' : '');
+                item.appendChild(node);
+
+                const content = document.createElement('div');
+                content.className = 'timeline-content';
+
+                const meta = document.createElement('div');
+                meta.className = 'timeline-meta';
+                let metaHtml = '';
+                if (timeText) {
+                    metaHtml += `<span class="timeline-time">${timeText}</span>`;
+                }
+                if (locationText) {
+                    metaHtml += '<span class="timeline-separator">·</span>' +
+                        `<span class="timeline-location">${locationText}</span>`;
+                }
+                if (peopleText) {
+                    metaHtml += '<span class="timeline-separator">·</span>' +
+                        `<span class="timeline-people">${peopleText}</span>`;
+                }
+                meta.innerHTML = metaHtml;
+                content.appendChild(meta);
+
+                const titleLink = document.createElement('a');
+                titleLink.className = 'timeline-title';
+                titleLink.textContent = evt.title || '未命名事件';
+                if (url) {
+                    titleLink.href = url;
+                    titleLink.target = '_blank';
+                } else {
+                    titleLink.href = 'javascript:void(0)';
+                }
+                content.appendChild(titleLink);
+
+                if (summaryText) {
+                    const summaryEl = document.createElement('div');
+                    summaryEl.className = 'timeline-summary';
+                    summaryEl.textContent = summaryText;
+                    content.appendChild(summaryEl);
+                }
+
+                item.appendChild(content);
+                timelineContainer.appendChild(item);
+            });
+        }
+
+        function renderGraph(data) {
+            const nodes = data.nodes || [];
+            const links = data.links || [];
+
+            // 每次渲染前先清空图表，避免多次结果堆叠
+            graphChart.clear();
+
+            if (!nodes.length) {
+                graphChart.clear();
+                graphChart.setOption({
+                    title: { text: '暂无知识图谱数据', left: 'center' },
+                });
+                return;
+            }
+
+            const categoryMap = new Map();
+            const categories = [];
+            nodes.forEach((n) => {
+                if (!categoryMap.has(n.category)) {
+                    categoryMap.set(n.category, categories.length);
+                    categories.push({ name: n.category });
+                }
+            });
+
+            const graphNodes = nodes.map((n) => {
+                const catIndex = categoryMap.get(n.category) ?? 0;
+                return {
+                    id: n.id,
+                    name: n.name,
+                    category: catIndex,
+                    symbolSize: 60,
+                    label: { show: true },
+                    tooltip: {
+                        formatter: `名称：${n.name}<br />类型：${n.category}`,
+                    },
+                };
+            });
+
+            const graphLinks = links.map((l) => ({
+                source: l.source,
+                target: l.target,
+                value: l.relation,
+                label: {
+                    show: false,
+                    formatter: l.relation,
+                },
+                tooltip: {
+                    formatter: `关系：${l.relation}`,
+                },
+            }));
+
+            const option = {
+                backgroundColor: '#ffffff',
+                title: {
+                    text: `关键词：${data.keyword || ''} 的新闻知识图谱`,
+                    left: 'center',
+                    top: 10,
+                },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: function (params) {
+                        if (params.dataType === 'node' && params.data && params.data.tooltip) {
+                            return params.data.tooltip.formatter;
+                        }
+                        if (params.dataType === 'edge' && params.data && params.data.tooltip) {
+                            return params.data.tooltip.formatter;
+                        }
+                        return params.name || '';
+                    },
+                },
+                legend: [{
+                    data: categories.map((c) => c.name),
+                    orient: 'vertical',
+                    left: 10,
+                    top: 60,
+                }],
+                series: [
+                    {
+                        type: 'graph',
+                        layout: 'force',
+                        data: graphNodes,
+                        links: graphLinks,
+                        categories: categories,
+                        roam: true,
+                        focusNodeAdjacency: true,
+                        force: {
+                            repulsion: 120,
+                            edgeLength: 120,
+                        },
+                        label: {
+                            position: 'inside',
+                            color: '#fff',
+                        },
+                        lineStyle: {
+                            color: '#aaa',
+                            width: 1.5,
+                            curveness: 0.1,
+                        },
+                        edgeSymbol: ['none', 'arrow'],
+                        edgeSymbolSize: 8,
+                    },
+                ],
+            };
+
+            graphChart.setOption(option);
+        }
+
+        document.getElementById('searchBtn').addEventListener('click', function () {
+            const input = document.getElementById('keywordInput');
+            const keyword = (input.value || '').trim();
+            if (!keyword) {
+                alert('请输入关键词后再搜索');
+                return;
+            }
+            // 每次新检索前清空下方结果，避免多次堆叠
+            timelineContainer.innerHTML = '';
+            graphChart.clear();
+            // 同时更新两个视图
+            loadTimeline(keyword);
+            loadGraph(keyword);
+        });
+
+        document.getElementById('keywordInput').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                document.getElementById('searchBtn').click();
+            }
+        });
+
+        window.addEventListener('resize', function () {
+            graphChart.resize();
+        });
+
+        // 页面加载时不进行自动检索，等待用户手动输入关键词并点击搜索
+    </script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <title>新闻知识图谱检索</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            background-color: #f5f5f5;
+        }
+        header {
+            padding: 12px 20px;
+            background-color: #1f2d3d;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        header .title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-right: 20px;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        input[type="text"] {
+            padding: 6px 8px;
+            min-width: 200px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+        button {
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #searchBtn {
+            background-color: #67c23a;
+            color: #fff;
+        }
+        #searchBtn:hover {
+            background-color: #85ce61;
+        }
+        a.link-btn {
+            text-decoration: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            background-color: #909399;
+            color: #fff;
+            font-size: 14px;
+        }
+        a.link-btn:hover {
+            background-color: #a6a9ad;
+        }
+        #chart {
+            width: 100%;
+            height: calc(100vh - 64px);
+            background-color: #fff;
+        }
+        .hint {
+            padding: 8px 20px;
+            font-size: 13px;
+            color: #666;
+            background-color: #f0f2f5;
+        }
+    </style>
+    <!-- ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body>
+    <header>
+        <div class="title">新闻知识图谱视图</div>
+        <div class="controls">
+            <input id="keywordInput" type="text" placeholder="输入关键词，例如：人工智能" />
+            <button id="searchBtn">检索知识图谱</button>
+            <a class="link-btn" href="/static/index.html">返回时间线视图</a>
+        </div>
+    </header>
+    <div class="hint">说明：上方输入关键词点击“检索知识图谱”，下方将以网状节点形式展示事件、人物、地点、主题之间的关系。节点可拖拽，鼠标悬停查看详情，滚轮可缩放。</div>
+    <div id="chart"></div>
+
+    <script>
+        const chartDom = document.getElementById('chart');
+        const chart = echarts.init(chartDom);
+
+        async function loadGraph(keyword) {
+            try {
+                const resp = await fetch(`/api/graph?keyword=${encodeURIComponent(keyword)}`);
+                if (!resp.ok) {
+                    throw new Error('网络请求失败');
+                }
+                const data = await resp.json();
+                renderGraph(data);
+            } catch (err) {
+                console.error(err);
+                chart.clear();
+                chart.setOption({
+                    title: { text: '加载失败', left: 'center' },
+                    graphic: [{
+                        type: 'text',
+                        left: 'center',
+                        top: 'middle',
+                        style: {
+                            text: '请求知识图谱数据失败，请确认后端已启动（go run main.go）。',
+                            fill: '#666',
+                            fontSize: 14,
+                        },
+                    }],
+                });
+            }
+        }
+
+        function renderGraph(data) {
+            const nodes = data.nodes || [];
+            const links = data.links || [];
+
+            // 每次渲染前先清空图表，避免多次结果堆叠
+            chart.clear();
+
+            if (!nodes.length) {
+                chart.clear();
+                chart.setOption({
+                    title: { text: '暂无数据', left: 'center' },
+                });
+                return;
+            }
+
+            const categoryMap = new Map();
+            const categories = [];
+            nodes.forEach((n) => {
+                if (!categoryMap.has(n.category)) {
+                    categoryMap.set(n.category, categories.length);
+                    categories.push({ name: n.category });
+                }
+            });
+
+            const graphNodes = nodes.map((n) => {
+                const catIndex = categoryMap.get(n.category) ?? 0;
+                return {
+                    id: n.id,
+                    name: n.name,
+                    category: catIndex,
+                    symbolSize: 60,
+                    label: { show: true },
+                    tooltip: {
+                        formatter: `名称：${n.name}<br />类型：${n.category}`,
+                    },
+                };
+            });
+
+            const graphLinks = links.map((l) => ({
+                source: l.source,
+                target: l.target,
+                value: l.relation,
+                label: {
+                    show: false,
+                    formatter: l.relation,
+                },
+                tooltip: {
+                    formatter: `关系：${l.relation}`,
+                },
+            }));
+
+            const option = {
+                backgroundColor: '#ffffff',
+                title: {
+                    text: `关键词：${data.keyword || ''} 的新闻知识图谱`,
+                    left: 'center',
+                    top: 10,
+                },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: function (params) {
+                        if (params.dataType === 'node' && params.data && params.data.tooltip) {
+                            return params.data.tooltip.formatter;
+                        }
+                        if (params.dataType === 'edge' && params.data && params.data.tooltip) {
+                            return params.data.tooltip.formatter;
+                        }
+                        return params.name || '';
+                    },
+                },
+                legend: [{
+                    data: categories.map((c) => c.name),
+                    orient: 'vertical',
+                    left: 10,
+                    top: 60,
+                }],
+                series: [
+                    {
+                        type: 'graph',
+                        layout: 'force',
+                        data: graphNodes,
+                        links: graphLinks,
+                        categories: categories,
+                        roam: true,
+                        focusNodeAdjacency: true,
+                        force: {
+                            repulsion: 120,
+                            edgeLength: 120,
+                        },
+                        label: {
+                            position: 'inside',
+                            color: '#fff',
+                        },
+                        lineStyle: {
+                            color: '#aaa',
+                            width: 1.5,
+                            curveness: 0.1,
+                        },
+                        edgeSymbol: ['none', 'arrow'],
+                        edgeSymbolSize: 8,
+                    },
+                ],
+            };
+
+            chart.setOption(option);
+        }
+
+        document.getElementById('searchBtn').addEventListener('click', function () {
+            const input = document.getElementById('keywordInput');
+            const keyword = (input.value || '').trim();
+            if (!keyword) {
+                alert('请输入关键词后再检索');
+                return;
+            }
+            // 每次新检索前清空图表，避免多次结果堆叠
+            chart.clear();
+            loadGraph(keyword);
+        });
+
+        document.getElementById('keywordInput').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                document.getElementById('searchBtn').click();
+            }
+        });
+
+        window.addEventListener('resize', function () {
+            chart.resize();
+        });
+
+        // 页面加载时不进行默认检索，等待用户手动输入关键词
+    </script>
+</body>
+</html>
