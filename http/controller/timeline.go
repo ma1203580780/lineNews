@@ -2,12 +2,14 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"lineNews/agent"
+	"lineNews/agent/tool"
 
 	"github.com/gin-gonic/gin"
 )
@@ -140,6 +142,58 @@ func HandleTimeline(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, timeline)
+}
+
+// HandleTimelineStream 处理时间链流式请求
+func HandleTimelineStream(c *gin.Context) {
+	keyword := c.Query("keyword")
+	if keyword == "" {
+		keyword = "新闻"
+	}
+
+	ctx := c.Request.Context()
+
+	// 设置 SSE 响应头
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+
+	// 创建发送事件的函数
+	sendEvent := func(event tool.StreamEvent) error {
+		// 将事件序列化为JSON
+		data, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+
+		// 发送SSE事件
+		_, err = c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", data)))
+		if err != nil {
+			return err
+		}
+
+		// 立即刷新响应
+		c.Writer.Flush()
+
+		return nil
+	}
+
+	// 使用 Agent 流式生成时间链
+	_, err := agentManager.agent.GenerateTimelineStream(ctx, keyword, sendEvent)
+	if err != nil {
+		fmt.Printf("[Controller] 流式生成时间链失败: %v\n", err)
+		// 发送错误事件
+		errorEvent := tool.StreamEvent{
+			Type:    "error",
+			Content: fmt.Sprintf("生成时间链失败: %v", err),
+			Stage:   "总览",
+		}
+		data, _ := json.Marshal(errorEvent)
+		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", data)))
+		c.Writer.Flush()
+		return
+	}
 }
 
 // HandleGraph 处理知识图谱请求

@@ -14,7 +14,7 @@ import (
 
 const (
 	DefaultDeepSeekAPIKey = ""
-	DefaultDeepSeekModel  = "deepseek-chat"
+	DefaultDeepSeekModel  = "deepseek-r1" //速度最快
 	DefaultDeepSeekURL    = "https://api.deepseek.com"
 )
 

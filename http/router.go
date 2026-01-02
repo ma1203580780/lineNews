@@ -25,9 +25,10 @@ func SetupRouter() *gin.Engine {
 		api.Use(middleware.GlobalRateLimiter.Limit())
 
 		// 基础服务路由
-		api.GET("/health", controller.HandleHealthCheck) // 健康检查
-		api.GET("/timeline", controller.HandleTimeline)  // 时间链
-		api.GET("/graph", controller.HandleGraph)        // 知识图谱
+		api.GET("/health", controller.HandleHealthCheck)             // 健康检查
+		api.GET("/timeline", controller.HandleTimeline)              // 时间链
+		api.GET("/timeline/stream", controller.HandleTimelineStream) // 时间链流式
+		api.GET("/graph", controller.HandleGraph)                    // 知识图谱
 
 		// 百度深度搜索路由
 		api.GET("/deepsearch/search", controller.HandleDeepSearch)        // GET /api/deepsearch/search?query=xxx

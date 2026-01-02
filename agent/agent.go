@@ -13,10 +13,11 @@ import (
 
 // NewsTimelineAgent 新闻时间链 Agent
 type NewsTimelineAgent struct {
-	chatModel        *deepseek.ChatModel
-	apiKey           string
-	timelineWorkflow *workflow.TimelineWorkflow
-	graphWorkflow    *workflow.GraphWorkflow
+	chatModel              *deepseek.ChatModel
+	apiKey                 string
+	timelineWorkflow       *workflow.TimelineWorkflow
+	graphWorkflow          *workflow.GraphWorkflow
+	streamTimelineWorkflow *workflow.StreamTimelineWorkflow
 }
 
 // NewNewsTimelineAgent 创建新闻时间链 Agent
@@ -38,16 +39,19 @@ func NewNewsTimelineAgent(ctx context.Context, apiKey string) (*NewsTimelineAgen
 
 	// 创建LLM调用器
 	llmCaller := tool.NewLLMCaller(chatModel)
+	streamLLMCaller := tool.NewStreamLLMCaller(chatModel)
 
 	// 创建工作流
 	timelineWorkflow := workflow.NewTimelineWorkflow(llmCaller)
 	graphWorkflow := workflow.NewGraphWorkflow(llmCaller)
+	streamTimelineWorkflow := workflow.NewStreamTimelineWorkflow(streamLLMCaller)
 
 	return &NewsTimelineAgent{
-		chatModel:        chatModel,
-		apiKey:           apiKey,
-		timelineWorkflow: timelineWorkflow,
-		graphWorkflow:    graphWorkflow,
+		chatModel:              chatModel,
+		apiKey:                 apiKey,
+		timelineWorkflow:       timelineWorkflow,
+		graphWorkflow:          graphWorkflow,
+		streamTimelineWorkflow: streamTimelineWorkflow,
 	}, nil
 }
 
@@ -59,6 +63,24 @@ func (a *NewsTimelineAgent) GenerateTimeline(ctx context.Context, keyword string
 	}
 
 	// 将workflow包的类型转换为agent包的类型
+	return &TimelineResponse{
+		Keyword: result.Keyword,
+		Events:  convertEvents(result.Events),
+	}, nil
+}
+
+// GenerateTimelineStream 流式生成新闻时间链
+func (a *NewsTimelineAgent) GenerateTimelineStream(
+	ctx context.Context,
+	keyword string,
+	sendEvent func(tool.StreamEvent) error,
+) (*TimelineResponse, error) {
+	// 将workflow包的类型转换为agent包的类型
+	result, err := a.streamTimelineWorkflow.GenerateStream(ctx, keyword, sendEvent)
+	if err != nil {
+		return nil, err
+	}
+
 	return &TimelineResponse{
 		Keyword: result.Keyword,
 		Events:  convertEvents(result.Events),
