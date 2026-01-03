@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"lineNews/agent"
 	"lineNews/agent/logutil"
@@ -68,14 +69,40 @@ func (am *AgentManager) generateTimeline(ctx context.Context, keyword string, mo
 		return nil, fmt.Errorf("调用Ark模型失败: %w", err)
 	}
 
+	// 打印模型原始输出日志
+	logutil.LogInfo("Ark模型原始输出: %s", response.Content)
+
 	// 解析返回的JSON
 	var timeline agent.TimelineResponse
-	if err := json.Unmarshal([]byte(response.Content), &timeline); err != nil {
+	// 检查响应内容是否为空
+	trimmedContent := strings.TrimSpace(response.Content)
+	if trimmedContent == "" {
+		logutil.LogInfo("Ark模型返回空响应")
+		// 返回一个基本的响应
+		timeline = agent.TimelineResponse{
+			Keyword: keyword,
+			Events: []agent.Event{
+				{
+					ID:       "1",
+					Title:    fmt.Sprintf("%s 相关事件", keyword),
+					Time:     "2024-01-01",
+					Location: "未知地点",
+					People:   []string{"未知人物"},
+					Summary:  "模型未返回有效内容",
+				},
+			},
+		}
+	} else if err := json.Unmarshal([]byte(trimmedContent), &timeline); err != nil {
 		// 如果直接解析失败，尝试从响应中提取JSON部分
 		logutil.LogInfo("直接解析JSON失败，尝试提取: %v", err)
-		jsonStart := findJSONStart(response.Content)
+		jsonStart := findJSONStart(trimmedContent)
 		if jsonStart != -1 {
-			jsonContent := response.Content[jsonStart:]
+			jsonContent := trimmedContent[jsonStart:]
+			// 尝试找到JSON的结束位置
+			jsonEnd := findJSONEnd(jsonContent)
+			if jsonEnd != -1 {
+				jsonContent = jsonContent[:jsonEnd+1]
+			}
 			if err := json.Unmarshal([]byte(jsonContent), &timeline); err == nil {
 				logutil.LogInfo("成功提取并解析JSON")
 			} else {
@@ -94,21 +121,6 @@ func (am *AgentManager) generateTimeline(ctx context.Context, keyword string, mo
 						},
 					},
 				}
-			}
-		} else {
-			// 如果找不到JSON，创建一个基本的响应
-			timeline = agent.TimelineResponse{
-				Keyword: keyword,
-				Events: []agent.Event{
-					{
-						ID:       "1",
-						Title:    fmt.Sprintf("%s 相关事件", keyword),
-						Time:     "2024-01-01",
-						Location: "未知地点",
-						People:   []string{"未知人物"},
-						Summary:  response.Content,
-					},
-				},
 			}
 		}
 	}
@@ -201,7 +213,7 @@ func HandleTimelineStream(c *gin.Context) {
 
 	arkModelID := os.Getenv("ARK_MODEL_ID")
 	if arkModelID == "" {
-		arkModelID = model.DefaultArkModel
+		arkModelID = model.ArkFlashModel
 	}
 
 	// 构建用户请求
@@ -224,18 +236,44 @@ func HandleTimelineStream(c *gin.Context) {
 		return
 	}
 
+	// 打印模型原始输出日志
+	logutil.LogInfo("Ark模型原始输出: %s", response.Content)
+
 	// 发送处理中事件
 	c.SSEvent("processing", gin.H{"message": "正在解析模型响应"})
 	c.Writer.Flush()
 
 	// 解析返回的JSON
 	var timeline agent.TimelineResponse
-	if err := json.Unmarshal([]byte(response.Content), &timeline); err != nil {
+	// 检查响应内容是否为空
+	trimmedContent := strings.TrimSpace(response.Content)
+	if trimmedContent == "" {
+		logutil.LogInfo("Ark模型返回空响应")
+		// 返回一个基本的响应
+		timeline = agent.TimelineResponse{
+			Keyword: keyword,
+			Events: []agent.Event{
+				{
+					ID:       "1",
+					Title:    fmt.Sprintf("%s 相关事件", keyword),
+					Time:     "2024-01-01",
+					Location: "未知地点",
+					People:   []string{"未知人物"},
+					Summary:  "模型未返回有效内容",
+				},
+			},
+		}
+	} else if err := json.Unmarshal([]byte(trimmedContent), &timeline); err != nil {
 		// 如果直接解析失败，尝试从响应中提取JSON部分
 		logutil.LogInfo("直接解析JSON失败，尝试提取: %v", err)
-		jsonStart := findJSONStart(response.Content)
+		jsonStart := findJSONStart(trimmedContent)
 		if jsonStart != -1 {
-			jsonContent := response.Content[jsonStart:]
+			jsonContent := trimmedContent[jsonStart:]
+			// 尝试找到JSON的结束位置
+			jsonEnd := findJSONEnd(jsonContent)
+			if jsonEnd != -1 {
+				jsonContent = jsonContent[:jsonEnd+1]
+			}
 			if err := json.Unmarshal([]byte(jsonContent), &timeline); err == nil {
 				logutil.LogInfo("成功提取并解析JSON")
 			} else {
@@ -254,21 +292,6 @@ func HandleTimelineStream(c *gin.Context) {
 						},
 					},
 				}
-			}
-		} else {
-			// 如果找不到JSON，创建一个基本的响应
-			timeline = agent.TimelineResponse{
-				Keyword: keyword,
-				Events: []agent.Event{
-					{
-						ID:       "1",
-						Title:    fmt.Sprintf("%s 相关事件", keyword),
-						Time:     "2024-01-01",
-						Location: "未知地点",
-						People:   []string{"未知人物"},
-						Summary:  response.Content,
-					},
-				},
 			}
 		}
 	}
@@ -396,4 +419,26 @@ func findJSONStart(content string) int {
 		}
 	}
 	return start
+}
+
+// findJSONEnd 查找内容中的 JSON 结束位置
+func findJSONEnd(content string) int {
+	// 寻找匹配的括号或方括号
+	stack := 0
+	startChar := byte(0)
+	for i := 0; i < len(content); i++ {
+		char := content[i]
+		if char == '{' || char == '[' {
+			if startChar == 0 {
+				startChar = char
+			}
+			stack++
+		} else if (char == '}' && startChar == '{') || (char == ']' && startChar == '[') {
+			stack--
+			if stack == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }

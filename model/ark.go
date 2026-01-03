@@ -15,6 +15,7 @@ import (
 
 const (
 	DefaultArkModel = "doubao-seed-1-6-251015"
+	ArkFlashModel   = "doubao-seed-1-6-flash-250828"
 )
 
 // ==================== 数据结构 ====================
@@ -32,13 +33,25 @@ type Tool struct {
 	Type string `json:"type"`
 }
 
-// ArkRequestModel API请求结构
-type ArkRequestModel struct {
-	Model               string         `json:"model"`
-	MaxCompletionTokens int            `json:"max_completion_tokens,omitempty"`
-	Messages            []MessageModel `json:"messages"`
-	ReasoningEffort     string         `json:"reasoning_effort,omitempty"`
-	Tools               []Tool         `json:"tools,omitempty"`
+// ArkInputContent 输入内容项
+type ArkInputContent struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
+}
+
+// ArkInput 输入结构
+type ArkInput struct {
+	Role    string            `json:"role"`
+	Content []ArkInputContent `json:"content"`
+}
+
+// ArkRequestWithTools 带工具的请求结构
+type ArkRequestWithTools struct {
+	Model           string     `json:"model"`
+	Stream          bool       `json:"stream"`
+	Tools           []Tool     `json:"tools,omitempty"`
+	Input           []ArkInput `json:"input"`
+	ReasoningEffort string     `json:"reasoning_effort,omitempty"`
 }
 
 // MessageModel 消息结构
@@ -61,12 +74,73 @@ type ImageURLModel struct {
 
 // ArkResponseModel API响应结构
 type ArkResponseModel struct {
+	CreatedAt       int64        `json:"created_at"`
+	ID              string       `json:"id"`
+	MaxOutputTokens int          `json:"max_output_tokens"`
+	Model           string       `json:"model"`
+	Object          string       `json:"object"`
+	Output          []OutputItem `json:"output"`
+	ServiceTier     string       `json:"service_tier"`
+	Status          string       `json:"status"`
+	Tools           []Tool       `json:"tools"`
+	Usage           UsageModel   `json:"usage"`
+	Caching         Caching      `json:"caching"`
+	Store           bool         `json:"store"`
+	ExpireAt        int64        `json:"expire_at"`
+}
+
+// OutputItem 输出项
+type OutputItem struct {
 	ID      string        `json:"id"`
-	Object  string        `json:"object"`
-	Created int64         `json:"created"`
-	Model   string        `json:"model"`
-	Choices []ChoiceModel `json:"choices"`
-	Usage   UsageModel    `json:"usage"`
+	Type    string        `json:"type"`
+	Summary []Summary     `json:"summary,omitempty"`
+	Action  SearchAction  `json:"action,omitempty"`
+	Content []ContentItem `json:"content,omitempty"`
+	Status  string        `json:"status"`
+	Role    string        `json:"role,omitempty"`
+}
+
+// Summary 摘要项
+type Summary struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// SearchAction 搜索动作
+type SearchAction struct {
+	Query string `json:"query"`
+	Type  string `json:"type"`
+}
+
+// ContentItem 内容项
+type ContentItem struct {
+	Type        string       `json:"type"`
+	Text        string       `json:"text,omitempty"`
+	Annotations []Annotation `json:"annotations,omitempty"`
+}
+
+// Annotation 注释
+type Annotation struct {
+	Type        string    `json:"type"`
+	Title       string    `json:"title"`
+	URL         string    `json:"url"`
+	LogoURL     string    `json:"logo_url"`
+	SiteName    string    `json:"site_name"`
+	PublishTime string    `json:"publish_time"`
+	Summary     string    `json:"summary"`
+	CoverImage  ImageInfo `json:"cover_image,omitempty"`
+}
+
+// ImageInfo 图像信息
+type ImageInfo struct {
+	URL    string `json:"url"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+// Caching 缓存信息
+type Caching struct {
+	Type string `json:"type"`
 }
 
 // ChoiceModel 选择项
@@ -78,9 +152,33 @@ type ChoiceModel struct {
 
 // UsageModel 使用情况
 type UsageModel struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens        int                 `json:"prompt_tokens"`
+	CompletionTokens    int                 `json:"completion_tokens"`
+	TotalTokens         int                 `json:"total_tokens"`
+	InputTokensDetails  InputTokensDetails  `json:"input_tokens_details"`
+	OutputTokensDetails OutputTokensDetails `json:"output_tokens_details"`
+	ToolUsage           map[string]int      `json:"tool_usage"`
+	ToolUsageDetails    ToolUsageDetails    `json:"tool_usage_details"`
+}
+
+// InputTokensDetails 输入Token详情
+type InputTokensDetails struct {
+	CachedTokens int `json:"cached_tokens"`
+}
+
+// OutputTokensDetails 输出Token详情
+type OutputTokensDetails struct {
+	ReasoningTokens int `json:"reasoning_tokens"`
+}
+
+// ToolUsageDetails 工具使用详情
+type ToolUsageDetails struct {
+	WebSearch WebSearchUsage `json:"web_search"`
+}
+
+// WebSearchUsage 联网搜索使用详情
+type WebSearchUsage struct {
+	SearchEngine int `json:"search_engine"`
 }
 
 // ==================== 核心操作 ====================
@@ -123,16 +221,16 @@ func SendArkMessage(ctx context.Context, modelID string, userMessage string, sys
 	}
 
 	// 构建请求体
-	requestBody := ArkRequestModel{
-		Model:               modelID,
-		MaxCompletionTokens: 65535,
-		ReasoningEffort:     "medium",
-		Messages: []MessageModel{
+	requestBody := ArkRequestWithTools{
+		Model:  modelID,
+		Stream: false,
+		Tools:  []Tool{{Type: "web_search"}},
+		Input: []ArkInput{
 			{
 				Role: "user",
-				Content: []ContentItemModel{
+				Content: []ArkInputContent{
 					{
-						Type: "text",
+						Type: "input_text",
 						Text: userMessage,
 					},
 				},
@@ -142,14 +240,14 @@ func SendArkMessage(ctx context.Context, modelID string, userMessage string, sys
 
 	// 如果有系统消息，需要特殊处理（Ark API 不直接支持系统消息）
 	if systemMessage != "" {
-		// 将系统消息合并到用户消息中
-		fullMessage := systemMessage + " " + userMessage
-		requestBody.Messages[0].Content = []ContentItemModel{
-			{
-				Type: "text",
-				Text: fullMessage,
-			},
-		}
+		// 将系统消息作为单独的输入项添加
+		requestBody.Input = append([]ArkInput{{
+			Role: "system",
+			Content: []ArkInputContent{{
+				Type: "input_text",
+				Text: systemMessage,
+			}},
+		}}, requestBody.Input...)
 	}
 
 	// 序列化请求体
@@ -159,7 +257,7 @@ func SendArkMessage(ctx context.Context, modelID string, userMessage string, sys
 	}
 
 	// 创建HTTP请求
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://ark.cn-beijing.volces.com/api/v3/chat/completions", bytes.NewBuffer(reqBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://ark.cn-beijing.volces.com/api/v3/responses", bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("创建HTTP请求失败: %w", err)
 	}
@@ -187,133 +285,43 @@ func SendArkMessage(ctx context.Context, modelID string, userMessage string, sys
 		return nil, fmt.Errorf("API请求失败，状态码: %d, 响应: %s", resp.StatusCode, string(respBody))
 	}
 
-	// 解析响应
+	// 解析响应 - 根据实际的Ark API响应结构
 	var apiResp ArkResponseModel
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
 
-	// 提取响应内容
+	// 提取响应内容 - 根据实际的API响应结构，查找type为message的output项
 	responseText := ""
-	if len(apiResp.Choices) > 0 {
-		choice := apiResp.Choices[0]
-		// 处理响应内容
-		if contentStr, ok := choice.Message.Content.(string); ok {
-			responseText = contentStr
-		} else if contentItems, ok := choice.Message.Content.([]interface{}); ok {
-			// 如果内容是数组，提取文本部分
-			for _, item := range contentItems {
-				if itemMap, ok := item.(map[string]interface{}); ok {
-					if itemMap["type"] == "text" {
-						if text, exists := itemMap["text"].(string); exists {
-							responseText = text
-							break
-						}
-					}
+	for _, output := range apiResp.Output {
+		if output.Type == "message" && output.Role == "assistant" {
+			// 在content数组中查找text类型的内容
+			for _, content := range output.Content {
+				if content.Type == "output_text" && content.Text != "" {
+					responseText = content.Text
+					break
 				}
 			}
-		} else if contentMap, ok := choice.Message.Content.(map[string]interface{}); ok {
-			// 如果内容是单个对象，检查文本字段
-			if text, exists := contentMap["text"].(string); exists {
-				responseText = text
+			if responseText != "" {
+				break // 找到内容后退出外层循环
 			}
 		}
 	}
 
-	// 返回结果
-	result := &ArkChatResponse{
-		Content:          responseText,
-		PromptTokens:     apiResp.Usage.PromptTokens,
-		CompletionTokens: apiResp.Usage.CompletionTokens,
-		TotalTokens:      apiResp.Usage.TotalTokens,
-	}
-
-	return result, nil
-}
-
-// SendArkMessageWithHistory 发送消息（支持对话历史）
-func SendArkMessageWithHistory(ctx context.Context, modelID string, messages []MessageModel) (*ArkChatResponse, error) {
-	apiKey := os.Getenv("ARK_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("ARK_API_KEY 环境变量未设置")
-	}
-
-	if modelID == "" {
-		modelID = DefaultArkModel
-	}
-
-	// 构建请求体
-	requestBody := ArkRequestModel{
-		Model:               modelID,
-		MaxCompletionTokens: 65535,
-		ReasoningEffort:     "medium",
-		Messages:            messages,
-	}
-
-	// 序列化请求体
-	reqBody, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, fmt.Errorf("序列化请求体失败: %w", err)
-	}
-
-	// 创建HTTP请求
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://ark.cn-beijing.volces.com/api/v3/chat/completions", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("创建HTTP请求失败: %w", err)
-	}
-
-	// 设置请求头
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
-
-	// 发送请求
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("发送请求失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// 读取响应体
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("读取响应失败: %w", err)
-	}
-
-	// 检查响应状态
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API请求失败，状态码: %d, 响应: %s", resp.StatusCode, string(respBody))
-	}
-
-	// 解析响应
-	var apiResp ArkResponseModel
-	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		return nil, fmt.Errorf("解析响应失败: %w", err)
-	}
-
-	// 提取响应内容
-	responseText := ""
-	if len(apiResp.Choices) > 0 {
-		choice := apiResp.Choices[0]
-		// 处理响应内容
-		if contentStr, ok := choice.Message.Content.(string); ok {
-			responseText = contentStr
-		} else if contentItems, ok := choice.Message.Content.([]interface{}); ok {
-			// 如果内容是数组，提取文本部分
-			for _, item := range contentItems {
-				if itemMap, ok := item.(map[string]interface{}); ok {
-					if itemMap["type"] == "text" {
-						if text, exists := itemMap["text"].(string); exists {
-							responseText = text
-							break
-						}
+	if responseText == "" {
+		logutil.LogInfo("在API响应中未找到有效的输出文本，响应结构: %+v", apiResp)
+		// 尝试从摘要中获取内容
+		for _, output := range apiResp.Output {
+			if output.Type == "reasoning" {
+				for _, summary := range output.Summary {
+					if summary.Type == "summary_text" && summary.Text != "" {
+						responseText = summary.Text
+						break
 					}
 				}
 			}
-		} else if contentMap, ok := choice.Message.Content.(map[string]interface{}); ok {
-			// 如果内容是单个对象，检查文本字段
-			if text, exists := contentMap["text"].(string); exists {
-				responseText = text
+			if responseText != "" {
+				break
 			}
 		}
 	}
