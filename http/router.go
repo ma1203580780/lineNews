@@ -39,8 +39,11 @@ func SetupRouter() *gin.Engine {
 		api.GET("/baike/lemma", controller.HandleBaikeSearchByLemmaId) // GET /api/baike/lemma?lemma_id=xxx
 
 		// Ark Chat 路由
-		api.GET("/arkchat/chat", controller.HandleArkChat)         // GET /api/arkchat/chat?message=xxx
-		api.GET("/arkchat/stream", controller.HandleArkChatStream) // GET /api/arkchat/stream?message=xxx
+		api.GET("/ark/chat", controller.HandleArkChat) // GET /api/ark/chat?message=xxx
+
+		// DeepSeek 路由
+		api.GET("/deepseek/chat", controller.HandleDeepSeekChat)         // GET /api/deepseek/chat?message=xxx
+		api.GET("/deepseek/stream", controller.HandleDeepSeekChatStream) // GET /api/deepseek/stream?message=xxx
 	}
 
 	return r

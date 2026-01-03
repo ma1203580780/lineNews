@@ -15,7 +15,7 @@ func main() {
 
 	// 初始化 Agent
 	ctx := context.Background()
-	if err := controller.InitAgent(ctx, cfg.DeepSeekAPIKey); err != nil {
+	if err := controller.InitAgent(ctx, cfg); err != nil {
 		log.Fatalf("[Main] 初始化失败: %v", err)
 	}
 

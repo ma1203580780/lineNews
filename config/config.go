@@ -16,6 +16,8 @@ type Config struct {
 	ArkModelID            string
 	BaiduBaikeAPIKey      string
 	BaiduDeepSearchAPIKey string
+	ArkModel              string
+	ArkBaseURL            string
 	ServerPort            string
 }
 

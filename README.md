@@ -48,7 +48,7 @@ lineNews/
 │   ├── baidudeepsearch.go    # 百度深度搜索封装
 │   ├── baidubaike.go         # 百度百科封装
 │   ├── deepseek.go           # DeepSeek API
-│   └── doubao.go             # 豆包 API
+│   └── ark.go             # Ark API
 ├── static/                    # 静态资源
 │   ├── index.html            # 首页
 │   └── graph.html            # 图谱可视化页面
@@ -120,9 +120,6 @@ go run main.go
 
 ## 特色功能
 
-### 1. 智能缓存机制
-- 10分钟内相同关键词请求使用缓存结果
-- 提高响应速度，减少 API 调用成本
 
 ### 2. 模块化设计
 - Model 层：外部 API 封装，统一接口规范

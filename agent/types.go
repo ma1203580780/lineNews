@@ -36,3 +36,12 @@ type GraphResponse struct {
 	Nodes   []GraphNode `json:"nodes"`
 	Links   []GraphLink `json:"links"`
 }
+
+// KeywordClarificationResponse 关键词澄清响应
+type KeywordClarificationResponse struct {
+	OriginalKeyword     string `json:"original_keyword"`
+	ClarifiedKeyword    string `json:"clarified_keyword"`
+	Type                string `json:"type"`
+	Description         string `json:"description"`
+	ProcessingDirection string `json:"processing_direction"`
+}

@@ -73,6 +73,24 @@
         #graphBtn:hover {
             background-color: #eebb69;
         }
+        .mode-selector {
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #dcdfe6;
+            background-color: #fff;
+            color: #606266;
+            cursor: pointer;
+            font-size: 12px;
+            margin-right: 12px;
+        }
+        .mode-selector:hover {
+            border-color: #b3d8ff;
+        }
+        .mode-selector:focus {
+            outline: none;
+            border-color: #409eff;
+            box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
+        }
         .hint {
             padding: 8px 20px;
             font-size: 13px;
@@ -370,6 +388,11 @@
         <div class="title">LineNews</div>
         <div class="controls">
             <input id="keywordInput" type="text" placeholder="输入新闻关键词，例如：人工智能" />
+            <select id="modeSelector" class="mode-selector">
+                <option value="fast" selected>Fast</option>
+                <option value="deepsearch">DeepSearch</option>
+                <option value="balanced">均衡</option>
+            </select>
             <button id="timelineBtn">时间线</button>
             <button id="graphBtn">知识图谱</button>
         </div>
@@ -399,6 +422,16 @@
         const resultSubtitle = document.getElementById('resultSubtitle');
         const origin = window.location.origin;
         const API_BASE = (!origin || origin === 'null' || origin.startsWith('file:')) ? 'http://localhost:8080' : origin;
+        
+        // 模式选择相关
+        const modeSelector = document.getElementById('modeSelector');
+        let selectedMode = 'fast'; // 默认模式
+        
+        // 为模式下拉框添加选择事件
+        modeSelector.addEventListener('change', function() {
+            selectedMode = this.value;
+            console.log('选中模式:', selectedMode);
+        });
 
         // 显示加载状态
         function showLoading() {
@@ -452,7 +485,7 @@
             resultSubtitle.textContent = '正在生成时间链，请稍候';
             
             // 使用 SSE 连接获取流式数据
-            const eventSource = new EventSource(`${API_BASE}/api/timeline/stream?keyword=${encodeURIComponent(keyword)}`);
+            const eventSource = new EventSource(`${API_BASE}/api/timeline/stream?keyword=${encodeURIComponent(keyword)}&mode=${selectedMode}`);
             
             eventSource.onmessage = function(event) {
                 try {
@@ -520,7 +553,7 @@
         
         // SSE失败时回退到普通请求
         function fallbackToNormalRequest(keyword) {
-            fetch(`${API_BASE}/api/timeline?keyword=${encodeURIComponent(keyword)}`)
+            fetch(`${API_BASE}/api/timeline?keyword=${encodeURIComponent(keyword)}&mode=${selectedMode}`)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error('网络请求失败');

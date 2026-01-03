@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sync"
-	"time"
 
 	"lineNews/agent"
 	"lineNews/agent/tool"
+	"lineNews/config"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,107 +16,51 @@ import (
 // AgentManager Agent 管理器
 type AgentManager struct {
 	agent *agent.NewsTimelineAgent
-	mu    sync.RWMutex
-	cache map[string]*CacheEntry
-}
-
-// CacheEntry 缓存条目
-type CacheEntry struct {
-	Timeline  *agent.TimelineResponse
-	Graph     *agent.GraphResponse
-	Timestamp time.Time
 }
 
 var (
 	agentManager *AgentManager
-	agentOnce    sync.Once
 )
 
 // InitAgent 初始化 Agent
-func InitAgent(ctx context.Context, apiKey string) error {
-	var initErr error
-	agentOnce.Do(func() {
-		agentInstance, err := agent.NewNewsTimelineAgent(ctx, apiKey)
-		if err != nil {
-			initErr = err
-			return
-		}
+func InitAgent(ctx context.Context, cfg *config.Config) error {
+	if agentManager != nil {
+		return nil // 已经初始化过了
+	}
 
-		agentManager = &AgentManager{
-			agent: agentInstance,
-			cache: make(map[string]*CacheEntry),
-		}
+	agentInstance, err := agent.NewNewsTimelineAgent(ctx, cfg)
+	if err != nil {
+		return err
+	}
 
-		fmt.Println("[Controller] Agent 初始化成功")
-	})
+	agentManager = &AgentManager{
+		agent: agentInstance,
+	}
 
-	return initErr
+	fmt.Println("[Controller] Agent 初始化成功")
+	return nil
 }
 
-// getOrGenerateTimeline 获取或生成时间链（带缓存）
-func (am *AgentManager) getOrGenerateTimeline(ctx context.Context, keyword string) (*agent.TimelineResponse, error) {
-	// 检查缓存
-	am.mu.RLock()
-	if entry, ok := am.cache[keyword]; ok {
-		// 缓存10分钟有效
-		if time.Since(entry.Timestamp) < 10*time.Minute {
-			am.mu.RUnlock()
-			fmt.Printf("[Controller] 使用缓存的时间链: %s\n", keyword)
-			return entry.Timeline, nil
-		}
-	}
-	am.mu.RUnlock()
-
-	// 生成新的时间链
-	fmt.Printf("[Controller] 开始从 Agent 生成时间链: %s\n", keyword)
-	timeline, err := am.agent.GenerateTimeline(ctx, keyword)
+// generateTimeline 生成时间链
+func (am *AgentManager) generateTimeline(ctx context.Context, keyword string, mode string) (*agent.TimelineResponse, error) {
+	// 生成时间链
+	fmt.Printf("[Controller] 开始从 Agent 生成时间链: %s (模式: %s)\n", keyword, mode)
+	timeline, err := am.agent.GenerateTimelineWithMode(ctx, keyword, mode)
 	if err != nil {
 		return nil, err
 	}
-
-	// 缓存结果
-	am.mu.Lock()
-	am.cache[keyword] = &CacheEntry{
-		Timeline:  timeline,
-		Timestamp: time.Now(),
-	}
-	am.mu.Unlock()
 
 	return timeline, nil
 }
 
-// getOrGenerateGraph 获取或生成知识图谱（带缓存）
-func (am *AgentManager) getOrGenerateGraph(ctx context.Context, keyword string, timeline *agent.TimelineResponse) (*agent.GraphResponse, error) {
-	// 检查缓存
-	am.mu.RLock()
-	if entry, ok := am.cache[keyword]; ok && entry.Graph != nil {
-		if time.Since(entry.Timestamp) < 10*time.Minute {
-			am.mu.RUnlock()
-			fmt.Printf("[Controller] 使用缓存的知识图谱: %s\n", keyword)
-			return entry.Graph, nil
-		}
-	}
-	am.mu.RUnlock()
-
-	// 生成新的图谱
-	fmt.Printf("[Controller] 开始从 Agent 生成图谱: %s\n", keyword)
+// generateGraph 生成知识图谱
+func (am *AgentManager) generateGraph(ctx context.Context, keyword string, timeline *agent.TimelineResponse, mode string) (*agent.GraphResponse, error) {
+	// 生成图谱
+	fmt.Printf("[Controller] 开始从 Agent 生成图谱: %s (模式: %s)\n", keyword, mode)
 	graph, err := am.agent.GenerateGraph(ctx, timeline)
 	if err != nil {
 		return nil, err
 	}
-
-	// 缓存结果
-	am.mu.Lock()
-	if entry, ok := am.cache[keyword]; ok {
-		entry.Graph = graph
-	} else {
-		am.cache[keyword] = &CacheEntry{
-			Timeline:  timeline,
-			Graph:     graph,
-			Timestamp: time.Now(),
-		}
-	}
-	am.mu.Unlock()
 
 	return graph, nil
 }
@@ -128,11 +71,15 @@ func HandleTimeline(c *gin.Context) {
 	if keyword == "" {
 		keyword = "新闻"
 	}
+	mode := c.Query("mode")
+	if mode == "" {
+		mode = "fast" // 默认模式
+	}
 
 	ctx := c.Request.Context()
 
 	// 使用 Agent 生成时间链
-	timeline, err := agentManager.getOrGenerateTimeline(ctx, keyword)
+	timeline, err := agentManager.generateTimeline(ctx, keyword, mode)
 	if err != nil {
 		fmt.Printf("[Controller] 生成时间链失败: %v\n", err)
 		// 失败时使用 mock 数据作为后备
@@ -149,6 +96,10 @@ func HandleTimelineStream(c *gin.Context) {
 	keyword := c.Query("keyword")
 	if keyword == "" {
 		keyword = "新闻"
+	}
+	mode := c.Query("mode")
+	if mode == "" {
+		mode = "fast" // 默认模式
 	}
 
 	ctx := c.Request.Context()
@@ -179,8 +130,8 @@ func HandleTimelineStream(c *gin.Context) {
 		return nil
 	}
 
-	// 使用 Agent 流式生成时间链
-	_, err := agentManager.agent.GenerateTimelineStream(ctx, keyword, sendEvent)
+	// 使用 Agent 流式生成时间链，根据模式选择
+	_, err := agentManager.agent.GenerateTimelineStreamWithMode(ctx, keyword, mode, sendEvent)
 	if err != nil {
 		fmt.Printf("[Controller] 流式生成时间链失败: %v\n", err)
 		// 发送错误事件
@@ -200,14 +151,17 @@ func HandleTimelineStream(c *gin.Context) {
 func HandleGraph(c *gin.Context) {
 	keyword := c.Query("keyword")
 	if keyword == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "keyword query parameter is required"})
-		return
+		keyword = "新闻"
+	}
+	mode := c.Query("mode")
+	if mode == "" {
+		mode = "fast" // 默认模式
 	}
 
 	ctx := c.Request.Context()
 
 	// 先获取时间链
-	timeline, err := agentManager.getOrGenerateTimeline(ctx, keyword)
+	timeline, err := agentManager.generateTimeline(ctx, keyword, mode)
 	if err != nil {
 		fmt.Printf("[Controller] 获取时间链失败: %v\n", err)
 		data := mockGraph(keyword)
@@ -216,7 +170,7 @@ func HandleGraph(c *gin.Context) {
 	}
 
 	// 再生成图谱
-	graph, err := agentManager.getOrGenerateGraph(ctx, keyword, timeline)
+	graph, err := agentManager.generateGraph(ctx, keyword, timeline, mode)
 	if err != nil {
 		fmt.Printf("[Controller] 生成图谱失败: %v\n", err)
 		data := mockGraph(keyword)

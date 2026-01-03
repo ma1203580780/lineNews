@@ -6,6 +6,7 @@ import (
 
 	"lineNews/agent/tool"
 	"lineNews/agent/workflow"
+	"lineNews/config"
 	"lineNews/model"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
@@ -18,21 +19,23 @@ type NewsTimelineAgent struct {
 	timelineWorkflow       *workflow.TimelineWorkflow
 	graphWorkflow          *workflow.GraphWorkflow
 	streamTimelineWorkflow *workflow.StreamTimelineWorkflow
+	modeWorkflow           *workflow.ModeWorkflow
+	streamModeWorkflow     *workflow.StreamModeWorkflow
 }
 
 // NewNewsTimelineAgent 创建新闻时间链 Agent
-func NewNewsTimelineAgent(ctx context.Context, apiKey string) (*NewsTimelineAgent, error) {
-	if apiKey == "" {
-		apiKey = model.DefaultDeepSeekAPIKey
+func NewNewsTimelineAgent(ctx context.Context, cfg *config.Config) (*NewsTimelineAgent, error) {
+	if cfg.DeepSeekAPIKey == "" {
+		return nil, fmt.Errorf("DeepSeek API Key 不能为空")
 	}
 
-	config := &model.DSModelConfig{
-		APIKey:  apiKey,
-		Model:   model.DefaultDeepSeekModel,
-		BaseURL: model.DefaultDeepSeekURL,
+	dsConfig := &model.DSModelConfig{
+		APIKey:  cfg.DeepSeekAPIKey,
+		Model:   cfg.DeepSeekModel,
+		BaseURL: cfg.DeepSeekBaseURL,
 	}
 
-	chatModel, err := model.CreateDSChatModel(ctx, config)
+	chatModel, err := model.CreateDSChatModel(ctx, dsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("创建 ChatModel 失败: %w", err)
 	}
@@ -45,13 +48,17 @@ func NewNewsTimelineAgent(ctx context.Context, apiKey string) (*NewsTimelineAgen
 	timelineWorkflow := workflow.NewTimelineWorkflow(llmCaller)
 	graphWorkflow := workflow.NewGraphWorkflow(llmCaller)
 	streamTimelineWorkflow := workflow.NewStreamTimelineWorkflow(streamLLMCaller)
+	modeWorkflow := workflow.NewModeWorkflow(llmCaller)
+	streamModeWorkflow := workflow.NewStreamModeWorkflow(streamLLMCaller)
 
 	return &NewsTimelineAgent{
 		chatModel:              chatModel,
-		apiKey:                 apiKey,
+		apiKey:                 cfg.DeepSeekAPIKey,
 		timelineWorkflow:       timelineWorkflow,
 		graphWorkflow:          graphWorkflow,
 		streamTimelineWorkflow: streamTimelineWorkflow,
+		modeWorkflow:           modeWorkflow,
+		streamModeWorkflow:     streamModeWorkflow,
 	}, nil
 }
 
@@ -75,12 +82,112 @@ func (a *NewsTimelineAgent) GenerateTimelineStream(
 	keyword string,
 	sendEvent func(tool.StreamEvent) error,
 ) (*TimelineResponse, error) {
-	// 将workflow包的类型转换为agent包的类型
-	result, err := a.streamTimelineWorkflow.GenerateStream(ctx, keyword, sendEvent)
+	// 使用默认模式（fast）
+	return a.GenerateTimelineStreamWithMode(ctx, keyword, "fast", sendEvent)
+}
+
+// GenerateTimelineStreamWithMode 根据模式流式生成新闻时间链
+func (a *NewsTimelineAgent) GenerateTimelineStreamWithMode(
+	ctx context.Context,
+	keyword string,
+	mode string,
+	sendEvent func(tool.StreamEvent) error,
+) (*TimelineResponse, error) {
+	switch mode {
+	case "fast":
+		result, err := a.streamModeWorkflow.GenerateFastModeStream(ctx, keyword, sendEvent)
+		if err != nil {
+			return nil, err
+		}
+		return &TimelineResponse{
+			Keyword: result.Keyword,
+			Events:  convertEvents(result.Events),
+		}, nil
+	case "deepsearch":
+		result, err := a.streamModeWorkflow.GenerateDeepSearchModeStream(ctx, keyword, sendEvent)
+		if err != nil {
+			return nil, err
+		}
+		return &TimelineResponse{
+			Keyword: result.Keyword,
+			Events:  convertEvents(result.Events),
+		}, nil
+	case "balanced":
+		result, err := a.streamModeWorkflow.GenerateBalancedModeStream(ctx, keyword, sendEvent)
+		if err != nil {
+			return nil, err
+		}
+		return &TimelineResponse{
+			Keyword: result.Keyword,
+			Events:  convertEvents(result.Events),
+		}, nil
+	default:
+		// 默认使用fast模式
+		result, err := a.streamModeWorkflow.GenerateFastModeStream(ctx, keyword, sendEvent)
+		if err != nil {
+			return nil, err
+		}
+		return &TimelineResponse{
+			Keyword: result.Keyword,
+			Events:  convertEvents(result.Events),
+		}, nil
+	}
+}
+
+// GenerateTimelineWithMode 根据模式生成新闻时间链
+func (a *NewsTimelineAgent) GenerateTimelineWithMode(ctx context.Context, keyword string, mode string) (*TimelineResponse, error) {
+	switch mode {
+	case "fast":
+		// Fast模式：调用百度百科接口，然后用ark模型来整理输出json结构
+		return a.generateFastMode(ctx, keyword)
+	case "deepsearch":
+		// Deepsearch模式：调用ark模型澄清整理关键词，React模式调用ark模型+联网TOOLS，反思通过后，ark整理输出json结构
+		return a.generateDeepSearchMode(ctx, keyword)
+	case "balanced":
+		// 均衡模式：调用ark模型澄清整理关键词，React模式调用使用百度AI搜索，ark模型调用整理输出json结构
+		return a.generateBalancedMode(ctx, keyword)
+	default:
+		// 默认使用fast模式
+		return a.generateFastMode(ctx, keyword)
+	}
+}
+
+// generateFastMode 实现Fast模式：调用百度百科接口，然后用ark模型来整理输出json结构
+func (a *NewsTimelineAgent) generateFastMode(ctx context.Context, keyword string) (*TimelineResponse, error) {
+	result, err := a.modeWorkflow.GenerateFastMode(ctx, keyword)
 	if err != nil {
 		return nil, err
 	}
 
+	// 将workflow包的类型转换为agent包的类型
+	return &TimelineResponse{
+		Keyword: result.Keyword,
+		Events:  convertEvents(result.Events),
+	}, nil
+}
+
+// generateDeepSearchMode 实现Deepsearch模式：使用ReAct模式调用ark模型+联网工具
+func (a *NewsTimelineAgent) generateDeepSearchMode(ctx context.Context, keyword string) (*TimelineResponse, error) {
+	result, err := a.modeWorkflow.GenerateDeepSearchMode(ctx, keyword)
+	if err != nil {
+		return nil, err
+	}
+
+	// 将workflow包的类型转换为agent包的类型
+	return &TimelineResponse{
+		Keyword: result.Keyword,
+		Events:  convertEvents(result.Events),
+	}, nil
+}
+
+// generateBalancedMode 实现均衡模式：使用百度AI搜索，ark模型整理输出
+func (a *NewsTimelineAgent) generateBalancedMode(ctx context.Context, keyword string) (*TimelineResponse, error) {
+	result, err := a.modeWorkflow.GenerateBalancedMode(ctx, keyword)
+	if err != nil {
+		return nil, err
+	}
+
+	// 将workflow包的类型转换为agent包的类型
 	return &TimelineResponse{
 		Keyword: result.Keyword,
 		Events:  convertEvents(result.Events),

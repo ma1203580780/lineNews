@@ -60,8 +60,8 @@ func (w *StreamTimelineWorkflow) GenerateStream(
 		return nil, err
 	}
 
-	// 第二步：反思优化（最多3轮）
-	const maxRefineRounds = 3
+	// 第二步：反思优化（最多1轮）
+	const maxRefineRounds = 1
 	currentTimeline := timeline
 	for i := 0; i < maxRefineRounds; i++ {
 		log.Printf("[StreamTimelineWorkflow] 第 %d 轮反思优化开始，当前事件数: %d", i+1, len(currentTimeline.Events))
@@ -143,16 +143,77 @@ func (w *StreamTimelineWorkflow) GenerateStream(
 	return currentTimeline, nil
 }
 
+// KeywordClarificationResponse 关键词澄清响应
+type KeywordClarificationResponse struct {
+	OriginalKeyword     string `json:"original_keyword"`
+	ClarifiedKeyword    string `json:"clarified_keyword"`
+	Type                string `json:"type"`
+	Description         string `json:"description"`
+	ProcessingDirection string `json:"processing_direction"`
+}
+
+// clarifyKeyword 使用LLM澄清关键词
+func (w *StreamTimelineWorkflow) clarifyKeyword(
+	ctx context.Context,
+	keyword string,
+	sendEvent func(tool.StreamEvent) error,
+) (*KeywordClarificationResponse, error) {
+	userPrompt := fmt.Sprintf("请从以下输入中提取并澄清核心关键词：「%s」", keyword)
+
+	var clarification KeywordClarificationResponse
+	err := w.streamLLMCaller.CallAndUnmarshalStream(
+		ctx,
+		prompt.KeywordClarificationSystemPrompt,
+		userPrompt,
+		"关键词澄清",
+		&clarification,
+		sendEvent,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("关键词澄清失败: %w", err)
+	}
+
+	return &clarification, nil
+}
+
 // generateInitialStream 初次生成时间链（流式版本）
 func (w *StreamTimelineWorkflow) generateInitialStream(
 	ctx context.Context,
 	keyword string,
 	sendEvent func(tool.StreamEvent) error,
 ) (*TimelineResponse, error) {
-	userPrompt := fmt.Sprintf("请为关键词「%s」生成新闻时间链", keyword)
+	// 首先进行关键词澄清
+	clarification, err := w.clarifyKeyword(ctx, keyword, sendEvent)
+	if err != nil {
+		log.Printf("[StreamTimelineWorkflow] 关键词澄清失败: %v", err)
+		// 如果澄清失败，继续使用原始关键词
+		clarification = &KeywordClarificationResponse{
+			OriginalKeyword:     keyword,
+			ClarifiedKeyword:    keyword,
+			Type:                "other",
+			Description:         "关键词澄清失败，使用原始关键词",
+			ProcessingDirection: "按照热点事件类关键词处理",
+		}
+	}
+
+	log.Printf("[StreamTimelineWorkflow] 关键词澄清完成: %s -> %s (%s)",
+		clarification.OriginalKeyword, clarification.ClarifiedKeyword, clarification.Type)
+
+	// 发送澄清结果事件
+	clarificationEvent := tool.StreamEvent{
+		Type: "thinking",
+		Content: fmt.Sprintf("关键词已澄清: %s -> %s (%s)",
+			clarification.OriginalKeyword, clarification.ClarifiedKeyword, clarification.Type),
+		Stage: "关键词澄清",
+	}
+	if err := sendEvent(clarificationEvent); err != nil {
+		return nil, err
+	}
+
+	userPrompt := fmt.Sprintf("请为关键词「%s」生成新闻时间链", clarification.ClarifiedKeyword)
 
 	var timeline TimelineResponse
-	err := w.streamLLMCaller.CallAndUnmarshalStream(
+	err = w.streamLLMCaller.CallAndUnmarshalStream(
 		ctx,
 		prompt.TimelineGenerationSystemPrompt,
 		userPrompt,
@@ -166,7 +227,7 @@ func (w *StreamTimelineWorkflow) generateInitialStream(
 
 	// 确保 keyword 被正确设置
 	if timeline.Keyword == "" {
-		timeline.Keyword = keyword
+		timeline.Keyword = clarification.ClarifiedKeyword
 	}
 
 	log.Printf("[StreamTimelineWorkflow] 初次生成完成，包含 %d 个事件", len(timeline.Events))
