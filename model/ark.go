@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"lineNews/agent/logutil"
 	"net/http"
 	"os"
 )
@@ -344,18 +344,15 @@ func StreamArkMessage(ctx context.Context, modelID string, userMessage string, s
 // LogArkChatResponse 打印响应信息
 func LogArkChatResponse(response *ArkChatResponse) {
 	if response == nil {
-		log.Println("响应为空")
+		logutil.LogInfo("响应为空")
 		return
 	}
 
 	// 使用json.Marshal来格式化输出
 	respJSON, _ := json.Marshal(response)
-	log.Printf("Ark 响应: %s", string(respJSON))
+	logutil.LogInfo("Ark 响应: %s", string(respJSON))
 
 	if response.TotalTokens > 0 {
-		fmt.Printf("\nToken 使用统计:\n")
-		fmt.Printf("  输入 Token: %d\n", response.PromptTokens)
-		fmt.Printf("  输出 Token: %d\n", response.CompletionTokens)
-		fmt.Printf("  总计 Token: %d\n", response.TotalTokens)
+		logutil.LogInfo("Token 使用统计:\n  输入 Token: %d\n  输出 Token: %d\n  总计 Token: %d", response.PromptTokens, response.CompletionTokens, response.TotalTokens)
 	}
 }

@@ -3,8 +3,8 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"log"
 
+	"lineNews/agent/logutil"
 	"lineNews/agent/prompt"
 	"lineNews/agent/tool"
 	"lineNews/model"
@@ -28,12 +28,12 @@ func (w *StreamModeWorkflow) GenerateFastModeStream(
 	keyword string,
 	sendEvent func(tool.StreamEvent) error,
 ) (*TimelineResponse, error) {
-	log.Printf("[StreamModeWorkflow] 开始执行Fast模式流式生成，关键词: %s", keyword)
+	logutil.LogInfo("开始执行Fast模式流式生成，关键词: %s", keyword)
 
 	// 1. 调用百度百科接口获取信息
 	baikeResp, err := model.BaiduBaikeSearchSimple(keyword)
 	if err != nil {
-		log.Printf("[StreamModeWorkflow] 百度百科搜索失败: %v", err)
+		logutil.LogError("百度百科搜索失败: %v", err)
 		// 如果百度百科失败，使用默认流程
 		return w.generateInitialStream(ctx, keyword, sendEvent)
 	}
@@ -53,7 +53,7 @@ func (w *StreamModeWorkflow) GenerateFastModeStream(
 			Stage:   "数据获取",
 		})
 	} else {
-		log.Printf("[StreamModeWorkflow] 百度百科未找到相关结果，使用默认流程")
+		logutil.LogInfo("百度百科未找到相关结果，使用默认流程")
 		sendEvent(tool.StreamEvent{
 			Type:    "thinking",
 			Content: "百度百科未找到相关信息，使用默认生成流程",
@@ -79,7 +79,7 @@ func (w *StreamModeWorkflow) GenerateFastModeStream(
 		sendEvent,
 	)
 	if err != nil {
-		log.Printf("[StreamModeWorkflow] Fast模式流式生成失败: %v，回退到默认流程", err)
+		logutil.LogError("Fast模式流式生成失败: %v，回退到默认流程", err)
 		sendEvent(tool.StreamEvent{
 			Type:    "error",
 			Content: fmt.Sprintf("Fast模式生成失败: %v", err),
@@ -99,7 +99,7 @@ func (w *StreamModeWorkflow) GenerateFastModeStream(
 		Stage:   "完成",
 	})
 
-	log.Printf("[StreamModeWorkflow] Fast模式流式生成完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("Fast模式流式生成完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }
 
@@ -109,7 +109,7 @@ func (w *StreamModeWorkflow) GenerateDeepSearchModeStream(
 	keyword string,
 	sendEvent func(tool.StreamEvent) error,
 ) (*TimelineResponse, error) {
-	log.Printf("[StreamModeWorkflow] 开始执行DeepSearch模式流式生成，关键词: %s", keyword)
+	logutil.LogInfo("开始执行DeepSearch模式流式生成，关键词: %s", keyword)
 
 	// 1. 使用ark模型澄清整理关键词
 	sendEvent(tool.StreamEvent{
@@ -120,7 +120,7 @@ func (w *StreamModeWorkflow) GenerateDeepSearchModeStream(
 
 	refinedKeyword, err := w.refineKeywordStream(ctx, keyword, sendEvent)
 	if err != nil {
-		log.Printf("[StreamModeWorkflow] 关键词澄清失败: %v，使用原始关键词", err)
+		logutil.LogError("关键词澄清失败: %v，使用原始关键词", err)
 		refinedKeyword = keyword
 		sendEvent(tool.StreamEvent{
 			Type:    "thinking",
@@ -144,7 +144,7 @@ func (w *StreamModeWorkflow) GenerateDeepSearchModeStream(
 
 	deepSearchResp, err := model.BaiduDeepSearchSimple(fmt.Sprintf("按照时间线梳理%s相关信息", refinedKeyword))
 	if err != nil {
-		log.Printf("[StreamModeWorkflow] 百度深度搜索失败: %v", err)
+		logutil.LogError("百度深度搜索失败: %v", err)
 		sendEvent(tool.StreamEvent{
 			Type:    "thinking",
 			Content: "深度搜索失败，使用默认流程",
@@ -158,7 +158,7 @@ func (w *StreamModeWorkflow) GenerateDeepSearchModeStream(
 	if len(deepSearchResp.Choices) > 0 {
 		searchContent = deepSearchResp.Choices[0].Message.Content
 	} else {
-		log.Printf("[StreamModeWorkflow] 深度搜索未返回内容，使用默认流程")
+		logutil.LogInfo("深度搜索未返回内容，使用默认流程")
 		sendEvent(tool.StreamEvent{
 			Type:    "thinking",
 			Content: "深度搜索未返回内容，使用默认流程",
@@ -195,7 +195,7 @@ func (w *StreamModeWorkflow) GenerateDeepSearchModeStream(
 		sendEvent,
 	)
 	if err != nil {
-		log.Printf("[StreamModeWorkflow] DeepSearch模式流式生成失败: %v", err)
+		logutil.LogError("DeepSearch模式流式生成失败: %v", err)
 		sendEvent(tool.StreamEvent{
 			Type:    "error",
 			Content: fmt.Sprintf("DeepSearch模式生成失败: %v", err),
@@ -215,7 +215,7 @@ func (w *StreamModeWorkflow) GenerateDeepSearchModeStream(
 		Stage:   "完成",
 	})
 
-	log.Printf("[StreamModeWorkflow] DeepSearch模式流式生成完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("DeepSearch模式流式生成完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }
 
@@ -225,7 +225,7 @@ func (w *StreamModeWorkflow) GenerateBalancedModeStream(
 	keyword string,
 	sendEvent func(tool.StreamEvent) error,
 ) (*TimelineResponse, error) {
-	log.Printf("[StreamModeWorkflow] 开始执行Balanced模式流式生成，关键词: %s", keyword)
+	logutil.LogInfo("开始执行Balanced模式流式生成，关键词: %s", keyword)
 
 	// 1. 使用ark模型澄清整理关键词
 	sendEvent(tool.StreamEvent{
@@ -236,7 +236,7 @@ func (w *StreamModeWorkflow) GenerateBalancedModeStream(
 
 	refinedKeyword, err := w.refineKeywordStream(ctx, keyword, sendEvent)
 	if err != nil {
-		log.Printf("[StreamModeWorkflow] 关键词澄清失败: %v，使用原始关键词", err)
+		logutil.LogError("关键词澄清失败: %v，使用原始关键词", err)
 		refinedKeyword = keyword
 		sendEvent(tool.StreamEvent{
 			Type:    "thinking",
@@ -260,7 +260,7 @@ func (w *StreamModeWorkflow) GenerateBalancedModeStream(
 
 	deepSearchResp, err := model.BaiduDeepSearchSimple(fmt.Sprintf("按照时间线梳理%s相关信息", refinedKeyword))
 	if err != nil {
-		log.Printf("[StreamModeWorkflow] 百度深度搜索失败: %v", err)
+		logutil.LogError("百度深度搜索失败: %v", err)
 		sendEvent(tool.StreamEvent{
 			Type:    "thinking",
 			Content: "AI搜索失败，使用默认流程",
@@ -274,7 +274,7 @@ func (w *StreamModeWorkflow) GenerateBalancedModeStream(
 	if len(deepSearchResp.Choices) > 0 {
 		searchContent = deepSearchResp.Choices[0].Message.Content
 	} else {
-		log.Printf("[StreamModeWorkflow] 深度搜索未返回内容，使用默认流程")
+		logutil.LogInfo("深度搜索未返回内容，使用默认流程")
 		sendEvent(tool.StreamEvent{
 			Type:    "thinking",
 			Content: "AI搜索未返回内容，使用默认流程",
@@ -311,7 +311,7 @@ func (w *StreamModeWorkflow) GenerateBalancedModeStream(
 		sendEvent,
 	)
 	if err != nil {
-		log.Printf("[StreamModeWorkflow] Balanced模式流式生成失败: %v", err)
+		logutil.LogError("Balanced模式流式生成失败: %v", err)
 		sendEvent(tool.StreamEvent{
 			Type:    "error",
 			Content: fmt.Sprintf("Balanced模式生成失败: %v", err),
@@ -331,7 +331,7 @@ func (w *StreamModeWorkflow) GenerateBalancedModeStream(
 		Stage:   "完成",
 	})
 
-	log.Printf("[StreamModeWorkflow] Balanced模式流式生成完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("Balanced模式流式生成完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }
 
@@ -386,6 +386,6 @@ func (w *StreamModeWorkflow) generateInitialStream(
 		timeline.Keyword = keyword
 	}
 
-	log.Printf("[StreamModeWorkflow] 流式初次生成完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("流式初次生成完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }

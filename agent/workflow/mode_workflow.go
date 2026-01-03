@@ -3,9 +3,9 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
+	"lineNews/agent/logutil"
 	"lineNews/agent/prompt"
 	"lineNews/agent/tool"
 	"lineNews/model"
@@ -25,12 +25,12 @@ func NewModeWorkflow(llmCaller *tool.LLMCaller) *ModeWorkflow {
 
 // GenerateFastMode 实现Fast模式：调用百度百科接口，然后用ark模型来整理输出json结构
 func (w *ModeWorkflow) GenerateFastMode(ctx context.Context, keyword string) (*TimelineResponse, error) {
-	log.Printf("[ModeWorkflow] 开始执行Fast模式，关键词: %s", keyword)
+	logutil.LogInfo("开始执行Fast模式，关键词: %s", keyword)
 
 	// 1. 调用百度百科接口获取信息
 	baikeResp, err := model.BaiduBaikeSearchSimple(keyword)
 	if err != nil {
-		log.Printf("[ModeWorkflow] 百度百科搜索失败: %v", err)
+		logutil.LogError("百度百科搜索失败: %v", err)
 		// 如果百度百科失败，使用默认流程
 		return w.generateInitial(ctx, keyword)
 	}
@@ -43,7 +43,7 @@ func (w *ModeWorkflow) GenerateFastMode(ctx context.Context, keyword string) (*T
 			baikeResp.Result.Summary,
 			baikeResp.Result.LemmaDesc)
 	} else {
-		log.Printf("[ModeWorkflow] 百度百科未找到相关结果，使用默认流程")
+		logutil.LogInfo("百度百科未找到相关结果，使用默认流程")
 		return w.generateInitial(ctx, keyword)
 	}
 
@@ -63,7 +63,7 @@ func (w *ModeWorkflow) GenerateFastMode(ctx context.Context, keyword string) (*T
 		&timeline,
 	)
 	if err != nil {
-		log.Printf("[ModeWorkflow] Fast模式生成失败: %v，回退到默认流程", err)
+		logutil.LogError("Fast模式生成失败: %v，回退到默认流程", err)
 		return w.generateInitial(ctx, keyword)
 	}
 
@@ -72,25 +72,25 @@ func (w *ModeWorkflow) GenerateFastMode(ctx context.Context, keyword string) (*T
 		timeline.Keyword = keyword
 	}
 
-	log.Printf("[ModeWorkflow] Fast模式完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("Fast模式完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }
 
 // GenerateDeepSearchMode 实现Deepsearch模式：使用ReAct模式调用ark模型+联网工具
 func (w *ModeWorkflow) GenerateDeepSearchMode(ctx context.Context, keyword string) (*TimelineResponse, error) {
-	log.Printf("[ModeWorkflow] 开始执行DeepSearch模式，关键词: %s", keyword)
+	logutil.LogInfo("开始执行DeepSearch模式，关键词: %s", keyword)
 
 	// 1. 使用ark模型澄清整理关键词
 	refinedKeyword, err := w.refineKeyword(ctx, keyword)
 	if err != nil {
-		log.Printf("[ModeWorkflow] 关键词澄清失败: %v，使用原始关键词", err)
+		logutil.LogError("关键词澄清失败: %v，使用原始关键词", err)
 		refinedKeyword = keyword
 	}
 
 	// 2. 使用百度深度搜索获取信息
 	deepSearchResp, err := model.BaiduDeepSearchSimple(fmt.Sprintf("按照时间线梳理%s相关信息", refinedKeyword))
 	if err != nil {
-		log.Printf("[ModeWorkflow] 百度深度搜索失败: %v", err)
+		logutil.LogError("百度深度搜索失败: %v", err)
 		// 如果深度搜索失败，使用默认流程
 		return w.generateInitial(ctx, refinedKeyword)
 	}
@@ -99,7 +99,7 @@ func (w *ModeWorkflow) GenerateDeepSearchMode(ctx context.Context, keyword strin
 	if len(deepSearchResp.Choices) > 0 {
 		searchContent = deepSearchResp.Choices[0].Message.Content
 	} else {
-		log.Printf("[ModeWorkflow] 深度搜索未返回内容，使用默认流程")
+		logutil.LogInfo("深度搜索未返回内容，使用默认流程")
 		return w.generateInitial(ctx, refinedKeyword)
 	}
 
@@ -124,7 +124,7 @@ func (w *ModeWorkflow) GenerateDeepSearchMode(ctx context.Context, keyword strin
 		&timeline,
 	)
 	if err != nil {
-		log.Printf("[ModeWorkflow] DeepSearch模式生成失败: %v，回退到默认流程", err)
+		logutil.LogError("DeepSearch模式生成失败: %v，回退到默认流程", err)
 		return w.generateInitial(ctx, refinedKeyword)
 	}
 
@@ -133,25 +133,25 @@ func (w *ModeWorkflow) GenerateDeepSearchMode(ctx context.Context, keyword strin
 		timeline.Keyword = refinedKeyword
 	}
 
-	log.Printf("[ModeWorkflow] DeepSearch模式完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("DeepSearch模式完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }
 
 // GenerateBalancedMode 实现均衡模式：使用百度AI搜索，ark模型整理输出
 func (w *ModeWorkflow) GenerateBalancedMode(ctx context.Context, keyword string) (*TimelineResponse, error) {
-	log.Printf("[ModeWorkflow] 开始执行Balanced模式，关键词: %s", keyword)
+	logutil.LogInfo("开始执行Balanced模式，关键词: %s", keyword)
 
 	// 1. 使用ark模型澄清整理关键词
 	refinedKeyword, err := w.refineKeyword(ctx, keyword)
 	if err != nil {
-		log.Printf("[ModeWorkflow] 关键词澄清失败: %v，使用原始关键词", err)
+		logutil.LogError("关键词澄清失败: %v，使用原始关键词", err)
 		refinedKeyword = keyword
 	}
 
 	// 2. 使用百度深度搜索获取信息
 	deepSearchResp, err := model.BaiduDeepSearchSimple(fmt.Sprintf("按照时间线梳理%s相关信息", refinedKeyword))
 	if err != nil {
-		log.Printf("[ModeWorkflow] 百度深度搜索失败: %v", err)
+		logutil.LogError("百度深度搜索失败: %v", err)
 		// 如果深度搜索失败，使用默认流程
 		return w.generateInitial(ctx, refinedKeyword)
 	}
@@ -160,7 +160,7 @@ func (w *ModeWorkflow) GenerateBalancedMode(ctx context.Context, keyword string)
 	if len(deepSearchResp.Choices) > 0 {
 		searchContent = deepSearchResp.Choices[0].Message.Content
 	} else {
-		log.Printf("[ModeWorkflow] 深度搜索未返回内容，使用默认流程")
+		logutil.LogInfo("深度搜索未返回内容，使用默认流程")
 		return w.generateInitial(ctx, refinedKeyword)
 	}
 
@@ -185,7 +185,7 @@ func (w *ModeWorkflow) GenerateBalancedMode(ctx context.Context, keyword string)
 		&timeline,
 	)
 	if err != nil {
-		log.Printf("[ModeWorkflow] Balanced模式生成失败: %v，回退到默认流程", err)
+		logutil.LogError("Balanced模式生成失败: %v，回退到默认流程", err)
 		return w.generateInitial(ctx, refinedKeyword)
 	}
 
@@ -194,7 +194,7 @@ func (w *ModeWorkflow) GenerateBalancedMode(ctx context.Context, keyword string)
 		timeline.Keyword = refinedKeyword
 	}
 
-	log.Printf("[ModeWorkflow] Balanced模式完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("Balanced模式完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }
 
@@ -243,6 +243,6 @@ func (w *ModeWorkflow) generateInitial(ctx context.Context, keyword string) (*Ti
 		timeline.Keyword = keyword
 	}
 
-	log.Printf("[ModeWorkflow] 初次生成完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("初次生成完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }

@@ -1,8 +1,9 @@
 package config
 
 import (
-	"log"
 	"os"
+
+	"lineNews/agent/logutil"
 
 	"github.com/joho/godotenv"
 )
@@ -25,7 +26,7 @@ type Config struct {
 func LoadConfig() *Config {
 	// 尝试加载 .env 文件
 	if err := godotenv.Load(); err != nil {
-		log.Printf("警告: 无法加载 .env 文件: %v", err)
+		logutil.LogInfo("警告: 无法加载 .env 文件: %v", err)
 		// 如果 .env 文件不存在，继续使用环境变量
 	}
 

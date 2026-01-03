@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+
+	"lineNews/agent/logutil"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	"github.com/cloudwego/eino/schema"
@@ -30,16 +31,16 @@ func (c *LLMCaller) CallWithPrompt(ctx context.Context, systemPrompt, userPrompt
 	}
 
 	// 打印提示词，便于调试观察
-	log.Printf("[LLMCaller] %s阶段 System Prompt:\n%s", stage, systemPrompt)
-	log.Printf("[LLMCaller] %s阶段 User Prompt:\n%s", stage, userPrompt)
-	log.Printf("[LLMCaller] 正在调用LLM: %s", stage)
+	logutil.LogInfo("[LLMCaller] %s阶段 System Prompt:\n%s", stage, systemPrompt)
+	logutil.LogInfo("[LLMCaller] %s阶段 User Prompt:\n%s", stage, userPrompt)
+	logutil.LogInfo("[LLMCaller] 正在调用LLM: %s", stage)
 
 	response, err := c.chatModel.Generate(ctx, messages)
 	if err != nil {
 		return "", fmt.Errorf("LLM调用失败: %w", err)
 	}
 
-	log.Printf("[LLMCaller] %s阶段 AI 响应: %s", stage, response.Content)
+	logutil.LogInfo("[LLMCaller] %s阶段 AI 响应: %s", stage, response.Content)
 	return response.Content, nil
 }
 

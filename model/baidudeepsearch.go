@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
+
+	"lineNews/agent/logutil"
 )
 
 // 外部模块可以直接调用 BaiduDeepSearch() 或 BaiduDeepSearchSimple() 进行搜索，无需关心客户端初始化细节！
@@ -17,19 +18,19 @@ func deepsearchdemo() {
 	// 方式1: 使用简化接口(默认配置)
 	response, err := BaiduDeepSearchSimple("按照时间线梳理川普生平")
 	if err != nil {
-		fmt.Printf("搜索失败: %v\n", err)
+		logutil.LogInfo("搜索失败: %v", err)
 		return
 	}
 
-	fmt.Printf("搜索成功:\n")
+	logutil.LogInfo("搜索成功:")
 	if len(response.Choices) > 0 {
-		fmt.Printf("AI回复: %s\n", response.Choices[0].Message.Content)
+		logutil.LogInfo("AI回复: %s", response.Choices[0].Message.Content)
 	}
-	fmt.Printf("请求ID: %s\n", response.RequestID)
-	fmt.Printf("安全检查: %t\n", response.IsSafe)
-	fmt.Printf("Token使用量 - 输入: %d, 输出: %d, 总计: %d\n",
+	logutil.LogInfo("请求ID: %s", response.RequestID)
+	logutil.LogInfo("安全检查: %t", response.IsSafe)
+	logutil.LogInfo("Token使用量 - 输入: %d, 输出: %d, 总计: %d",
 		response.Usage.PromptTokens, response.Usage.CompletionTokens, response.Usage.TotalTokens)
-	fmt.Printf("参考信息数量: %d\n", len(response.References))
+	logutil.LogInfo("参考信息数量: %d", len(response.References))
 
 	// 方式2: 使用自定义配置
 	// customOptions := NewDefaultRequest("")
@@ -276,7 +277,7 @@ func (c *BaiduDeepSearchClient) Search(req *BaiduDeepSearchRequest) (*BaiduDeepS
 
 	// 2. 执行HTTP请求
 	body, err := c.executeRequest(httpReq)
-	log.Println("Response:", string(body))
+	logutil.LogInfo("Response: %s", string(body))
 	if err != nil {
 		return nil, err
 	}

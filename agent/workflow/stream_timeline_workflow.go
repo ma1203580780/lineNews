@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
+	"lineNews/agent/logutil"
 	"lineNews/agent/prompt"
 	"lineNews/agent/tool"
 )
@@ -64,11 +64,11 @@ func (w *StreamTimelineWorkflow) GenerateStream(
 	const maxRefineRounds = 1
 	currentTimeline := timeline
 	for i := 0; i < maxRefineRounds; i++ {
-		log.Printf("[StreamTimelineWorkflow] 第 %d 轮反思优化开始，当前事件数: %d", i+1, len(currentTimeline.Events))
+		logutil.LogInfo("第 %d 轮反思优化开始，当前事件数: %d", i+1, len(currentTimeline.Events))
 
 		refinedTimeline, err := w.refineStream(ctx, keyword, currentTimeline, sendEvent, i+1)
 		if err != nil {
-			log.Printf("[StreamTimelineWorkflow] 第 %d 轮反思优化失败: %v", i+1, err)
+			logutil.LogError("第 %d 轮反思优化失败: %v", i+1, err)
 			// 发送警告但继续
 			warningEvent := tool.StreamEvent{
 				Type:    "thinking",
@@ -79,7 +79,7 @@ func (w *StreamTimelineWorkflow) GenerateStream(
 			break
 		}
 		if refinedTimeline == nil || len(refinedTimeline.Events) == 0 {
-			log.Printf("[StreamTimelineWorkflow] 第 %d 轮反思优化返回空结果，停止进一步反思", i+1)
+			logutil.LogInfo("第 %d 轮反思优化返回空结果，停止进一步反思", i+1)
 			// 发送警告但继续
 			warningEvent := tool.StreamEvent{
 				Type:    "thinking",
@@ -90,7 +90,7 @@ func (w *StreamTimelineWorkflow) GenerateStream(
 			break
 		}
 
-		log.Printf("[StreamTimelineWorkflow] 第 %d 轮反思优化后事件数: %d", i+1, len(refinedTimeline.Events))
+		logutil.LogInfo("第 %d 轮反思优化后事件数: %d", i+1, len(refinedTimeline.Events))
 		currentTimeline = refinedTimeline
 
 		// 发送优化后结果
@@ -105,7 +105,7 @@ func (w *StreamTimelineWorkflow) GenerateStream(
 
 		// 如果事件数量已经在理想范围内，则提前结束循环
 		if len(currentTimeline.Events) >= 15 && len(currentTimeline.Events) <= 100 {
-			log.Printf("[StreamTimelineWorkflow] 反思优化后事件数量已满足要求（%d 条），结束反思循环", len(currentTimeline.Events))
+			logutil.LogInfo("反思优化后事件数量已满足要求（%d 条），结束反思循环", len(currentTimeline.Events))
 			endOptEvent := tool.StreamEvent{
 				Type:    "thinking",
 				Content: fmt.Sprintf("反思优化后事件数量已满足要求（%d 条），结束反思循环", len(currentTimeline.Events)),
@@ -118,7 +118,7 @@ func (w *StreamTimelineWorkflow) GenerateStream(
 		}
 	}
 
-	log.Printf("[StreamTimelineWorkflow] 最终时间链生成完成，包含 %d 个事件", len(currentTimeline.Events))
+	logutil.LogInfo("最终时间链生成完成，包含 %d 个事件", len(currentTimeline.Events))
 
 	// 发送最终结果
 	finalEvent := tool.StreamEvent{
@@ -185,7 +185,7 @@ func (w *StreamTimelineWorkflow) generateInitialStream(
 	// 首先进行关键词澄清
 	clarification, err := w.clarifyKeyword(ctx, keyword, sendEvent)
 	if err != nil {
-		log.Printf("[StreamTimelineWorkflow] 关键词澄清失败: %v", err)
+		logutil.LogError("关键词澄清失败: %v", err)
 		// 如果澄清失败，继续使用原始关键词
 		clarification = &KeywordClarificationResponse{
 			OriginalKeyword:     keyword,
@@ -196,8 +196,7 @@ func (w *StreamTimelineWorkflow) generateInitialStream(
 		}
 	}
 
-	log.Printf("[StreamTimelineWorkflow] 关键词澄清完成: %s -> %s (%s)",
-		clarification.OriginalKeyword, clarification.ClarifiedKeyword, clarification.Type)
+	logutil.LogInfo("关键词澄清完成: %s -> %s (%s)", clarification.OriginalKeyword, clarification.ClarifiedKeyword, clarification.Type)
 
 	// 发送澄清结果事件
 	clarificationEvent := tool.StreamEvent{
@@ -230,7 +229,7 @@ func (w *StreamTimelineWorkflow) generateInitialStream(
 		timeline.Keyword = clarification.ClarifiedKeyword
 	}
 
-	log.Printf("[StreamTimelineWorkflow] 初次生成完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("初次生成完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }
 
@@ -277,7 +276,7 @@ func (w *StreamTimelineWorkflow) refineStream(
 
 	// 再次做数量上的兜底校验，如果仍然远少于 15 条，则保留原结果
 	if len(refined.Events) < 5 {
-		log.Printf("[StreamTimelineWorkflow] 反思后事件数过少(%d)，保留原始时间链(%d)", len(refined.Events), len(original.Events))
+		logutil.LogInfo("反思后事件数过少(%d)，保留原始时间链(%d)", len(refined.Events), len(original.Events))
 		return original, nil
 	}
 

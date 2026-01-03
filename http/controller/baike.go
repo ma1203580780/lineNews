@@ -2,8 +2,9 @@ package controller
 
 import (
 	"lineNews/model"
-	"log"
 	"net/http"
+
+	"lineNews/agent/logutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,12 +19,12 @@ func HandleBaikeSearch(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[Controller] 百度百科搜索请求: %s", keyword)
+	logutil.LogInfo("百度百科搜索请求: %s", keyword)
 
 	// 调用 model 层
 	response, err := model.BaiduBaikeSearchSimple(keyword)
 	if err != nil {
-		log.Printf("[Controller] 百科搜索失败: %v", err)
+		logutil.LogError("百科搜索失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "百科搜索失败",
 			"message": err.Error(),
@@ -48,12 +49,12 @@ func HandleBaikeSearchByLemmaId(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[Controller] 百度百科词条ID搜索: %s", lemmaId)
+	logutil.LogInfo("百度百科词条ID搜索: %s", lemmaId)
 
 	// 调用 model 层
 	response, err := model.BaiduBaikeSearchByLemmaId(lemmaId)
 	if err != nil {
-		log.Printf("[Controller] 百科词条ID搜索失败: %v", err)
+		logutil.LogError("百科词条ID搜索失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "百科搜索失败",
 			"message": err.Error(),

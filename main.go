@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
 
+	"lineNews/agent/logutil"
 	"lineNews/config"
 	"lineNews/http"
 	"lineNews/http/controller"
@@ -16,7 +16,7 @@ func main() {
 	// 初始化 Agent
 	ctx := context.Background()
 	if err := controller.InitAgent(ctx, cfg); err != nil {
-		log.Fatalf("[Main] 初始化失败: %v", err)
+		logutil.LogError("初始化失败: %v", err)
 	}
 
 	// 设置路由
@@ -24,8 +24,8 @@ func main() {
 
 	// 使用配置中的端口
 	port := ":" + cfg.ServerPort
-	log.Printf("[Main] 服务启动在 http://localhost:%s", cfg.ServerPort)
+	logutil.LogInfo("服务启动在 http://localhost:%s", cfg.ServerPort)
 	if err := r.Run(port); err != nil {
-		log.Fatalf("[Main] 服务启动失败: %v", err)
+		logutil.LogError("服务启动失败: %v", err)
 	}
 }

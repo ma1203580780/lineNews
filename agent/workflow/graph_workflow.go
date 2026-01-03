@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
+	"lineNews/agent/logutil"
 	"lineNews/agent/prompt"
 	"lineNews/agent/tool"
 )
@@ -58,29 +58,29 @@ func (w *GraphWorkflow) Generate(ctx context.Context, timeline *TimelineResponse
 	// 第二步：反思优化（最多3轮）
 	const maxGraphRefineRounds = 3
 	for i := 0; i < maxGraphRefineRounds; i++ {
-		log.Printf("[GraphWorkflow] 第 %d 轮反思优化开始，当前节点数: %d，边数: %d", i+1, len(graph.Nodes), len(graph.Links))
+		logutil.LogInfo("第 %d 轮反思优化开始，当前节点数: %d，边数: %d", i+1, len(graph.Nodes), len(graph.Links))
 
 		refinedGraph, err := w.refine(ctx, timeline.Keyword, graph)
 		if err != nil {
-			log.Printf("[GraphWorkflow] 第 %d 轮反思优化失败: %v", i+1, err)
+			logutil.LogError("第 %d 轮反思优化失败: %v", i+1, err)
 			break
 		}
 		if refinedGraph == nil || len(refinedGraph.Nodes) == 0 {
-			log.Printf("[GraphWorkflow] 第 %d 轮反思优化返回空结果，停止进一步反思", i+1)
+			logutil.LogInfo("第 %d 轮反思优化返回空结果，停止进一步反思", i+1)
 			break
 		}
 
-		log.Printf("[GraphWorkflow] 第 %d 轮反思优化后节点数: %d，边数: %d", i+1, len(refinedGraph.Nodes), len(refinedGraph.Links))
+		logutil.LogInfo("第 %d 轮反思优化后节点数: %d，边数: %d", i+1, len(refinedGraph.Nodes), len(refinedGraph.Links))
 		graph = refinedGraph
 
 		// 如果节点数量已经在理想范围内，则提前结束循环
 		if len(graph.Nodes) >= 20 && len(graph.Nodes) <= 100 {
-			log.Printf("[GraphWorkflow] 反思优化后节点数量已满足要求（%d 个），结束反思循环", len(graph.Nodes))
+			logutil.LogInfo("反思优化后节点数量已满足要求（%d 个），结束反思循环", len(graph.Nodes))
 			break
 		}
 	}
 
-	log.Printf("[GraphWorkflow] 最终知识图谱生成完成，包含 %d 个节点和 %d 条边", len(graph.Nodes), len(graph.Links))
+	logutil.LogInfo("最终知识图谱生成完成，包含 %d 个节点和 %d 条边", len(graph.Nodes), len(graph.Links))
 	return graph, nil
 }
 
@@ -111,7 +111,7 @@ func (w *GraphWorkflow) generateInitial(ctx context.Context, timeline *TimelineR
 		graph.Keyword = timeline.Keyword
 	}
 
-	log.Printf("[GraphWorkflow] 初次生成完成，包含 %d 个节点和 %d 条边", len(graph.Nodes), len(graph.Links))
+	logutil.LogInfo("初次生成完成，包含 %d 个节点和 %d 条边", len(graph.Nodes), len(graph.Links))
 	return &graph, nil
 }
 
@@ -151,7 +151,7 @@ func (w *GraphWorkflow) refine(ctx context.Context, keyword string, original *Gr
 
 	// 再次做数量上的兜底校验，如果仍然过少，则保留原结果
 	if len(refined.Nodes) < 10 {
-		log.Printf("[GraphWorkflow] 反思后节点数过少(%d)，保留原始知识图谱(%d)", len(refined.Nodes), len(original.Nodes))
+		logutil.LogInfo("反思后节点数过少(%d)，保留原始知识图谱(%d)", len(refined.Nodes), len(original.Nodes))
 		return original, nil
 	}
 

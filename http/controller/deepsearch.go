@@ -2,8 +2,9 @@ package controller
 
 import (
 	"lineNews/model"
-	"log"
 	"net/http"
+
+	"lineNews/agent/logutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,12 +19,12 @@ func HandleDeepSearch(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[Controller] 百度深度搜索请求: %s", query)
+	logutil.LogInfo("百度深度搜索请求: %s", query)
 
 	// 调用 model 层
 	response, err := model.BaiduDeepSearchSimple(query)
 	if err != nil {
-		log.Printf("[Controller] 深度搜索失败: %v", err)
+		logutil.LogError("深度搜索失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "深度搜索失败",
 			"message": err.Error(),
@@ -54,7 +55,7 @@ func HandleDeepSearchCustom(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[Controller] 自定义深度搜索请求: %s", req.Query)
+	logutil.LogInfo("自定义深度搜索请求: %s", req.Query)
 
 	// 构建自定义配置
 	options := model.NewDefaultRequest(req.Query)
@@ -71,7 +72,7 @@ func HandleDeepSearchCustom(c *gin.Context) {
 	// 调用 model 层
 	response, err := model.BaiduDeepSearch(req.Query, options)
 	if err != nil {
-		log.Printf("[Controller] 自定义深度搜索失败: %v", err)
+		logutil.LogError("自定义深度搜索失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "深度搜索失败",
 			"message": err.Error(),

@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
+	"lineNews/agent/logutil"
 	"lineNews/agent/prompt"
 	"lineNews/agent/tool"
 )
@@ -49,29 +49,29 @@ func (w *TimelineWorkflow) Generate(ctx context.Context, keyword string) (*Timel
 	// 第二步：反思优化（最多3轮）
 	const maxRefineRounds = 3
 	for i := 0; i < maxRefineRounds; i++ {
-		log.Printf("[TimelineWorkflow] 第 %d 轮反思优化开始，当前事件数: %d", i+1, len(timeline.Events))
+		logutil.LogInfo("第 %d 轮反思优化开始，当前事件数: %d", i+1, len(timeline.Events))
 
 		refinedTimeline, err := w.refine(ctx, keyword, timeline)
 		if err != nil {
-			log.Printf("[TimelineWorkflow] 第 %d 轮反思优化失败: %v", i+1, err)
+			logutil.LogError("第 %d 轮反思优化失败: %v", i+1, err)
 			break
 		}
 		if refinedTimeline == nil || len(refinedTimeline.Events) == 0 {
-			log.Printf("[TimelineWorkflow] 第 %d 轮反思优化返回空结果，停止进一步反思", i+1)
+			logutil.LogInfo("第 %d 轮反思优化返回空结果，停止进一步反思", i+1)
 			break
 		}
 
-		log.Printf("[TimelineWorkflow] 第 %d 轮反思优化后事件数: %d", i+1, len(refinedTimeline.Events))
+		logutil.LogInfo("第 %d 轮反思优化后事件数: %d", i+1, len(refinedTimeline.Events))
 		timeline = refinedTimeline
 
 		// 如果事件数量已经在理想范围内，则提前结束循环
 		if len(timeline.Events) >= 15 && len(timeline.Events) <= 100 {
-			log.Printf("[TimelineWorkflow] 反思优化后事件数量已满足要求（%d 条），结束反思循环", len(timeline.Events))
+			logutil.LogInfo("反思优化后事件数量已满足要求（%d 条），结束反思循环", len(timeline.Events))
 			break
 		}
 	}
 
-	log.Printf("[TimelineWorkflow] 最终时间链生成完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("最终时间链生成完成，包含 %d 个事件", len(timeline.Events))
 	return timeline, nil
 }
 
@@ -96,7 +96,7 @@ func (w *TimelineWorkflow) generateInitial(ctx context.Context, keyword string) 
 		timeline.Keyword = keyword
 	}
 
-	log.Printf("[TimelineWorkflow] 初次生成完成，包含 %d 个事件", len(timeline.Events))
+	logutil.LogInfo("初次生成完成，包含 %d 个事件", len(timeline.Events))
 	return &timeline, nil
 }
 
@@ -136,7 +136,7 @@ func (w *TimelineWorkflow) refine(ctx context.Context, keyword string, original 
 
 	// 再次做数量上的兜底校验，如果仍然远少于 15 条，则保留原结果
 	if len(refined.Events) < 5 {
-		log.Printf("[TimelineWorkflow] 反思后事件数过少(%d)，保留原始时间链(%d)", len(refined.Events), len(original.Events))
+		logutil.LogInfo("反思后事件数过少(%d)，保留原始时间链(%d)", len(refined.Events), len(original.Events))
 		return original, nil
 	}
 

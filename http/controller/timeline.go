@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"lineNews/agent"
+	"lineNews/agent/logutil"
 	"lineNews/agent/tool"
 	"lineNews/config"
 
@@ -37,14 +38,14 @@ func InitAgent(ctx context.Context, cfg *config.Config) error {
 		agent: agentInstance,
 	}
 
-	fmt.Println("[Controller] Agent 初始化成功")
+	logutil.LogInfo("Agent 初始化成功")
 	return nil
 }
 
 // generateTimeline 生成时间链
 func (am *AgentManager) generateTimeline(ctx context.Context, keyword string, mode string) (*agent.TimelineResponse, error) {
 	// 生成时间链
-	fmt.Printf("[Controller] 开始从 Agent 生成时间链: %s (模式: %s)\n", keyword, mode)
+	logutil.LogInfo("开始从 Agent 生成时间链: %s (模式: %s)", keyword, mode)
 	timeline, err := am.agent.GenerateTimelineWithMode(ctx, keyword, mode)
 	if err != nil {
 		return nil, err
@@ -56,7 +57,7 @@ func (am *AgentManager) generateTimeline(ctx context.Context, keyword string, mo
 // generateGraph 生成知识图谱
 func (am *AgentManager) generateGraph(ctx context.Context, keyword string, timeline *agent.TimelineResponse, mode string) (*agent.GraphResponse, error) {
 	// 生成图谱
-	fmt.Printf("[Controller] 开始从 Agent 生成图谱: %s (模式: %s)\n", keyword, mode)
+	logutil.LogInfo("开始从 Agent 生成图谱: %s (模式: %s)", keyword, mode)
 	graph, err := am.agent.GenerateGraph(ctx, timeline)
 	if err != nil {
 		return nil, err
@@ -69,7 +70,8 @@ func (am *AgentManager) generateGraph(ctx context.Context, keyword string, timel
 func HandleTimeline(c *gin.Context) {
 	keyword := c.Query("keyword")
 	if keyword == "" {
-		keyword = "新闻"
+		c.JSON(http.StatusOK, gin.H{"error": "keyword query parameter is required"})
+		return
 	}
 	mode := c.Query("mode")
 	if mode == "" {
@@ -81,7 +83,7 @@ func HandleTimeline(c *gin.Context) {
 	// 使用 Agent 生成时间链
 	timeline, err := agentManager.generateTimeline(ctx, keyword, mode)
 	if err != nil {
-		fmt.Printf("[Controller] 生成时间链失败: %v\n", err)
+		logutil.LogError("生成时间链失败: %v", err)
 		// 失败时使用 mock 数据作为后备
 		data := mockTimeline(keyword)
 		c.JSON(http.StatusOK, data)
@@ -133,7 +135,7 @@ func HandleTimelineStream(c *gin.Context) {
 	// 使用 Agent 流式生成时间链，根据模式选择
 	_, err := agentManager.agent.GenerateTimelineStreamWithMode(ctx, keyword, mode, sendEvent)
 	if err != nil {
-		fmt.Printf("[Controller] 流式生成时间链失败: %v\n", err)
+		logutil.LogError("流式生成时间链失败: %v", err)
 		// 发送错误事件
 		errorEvent := tool.StreamEvent{
 			Type:    "error",
@@ -163,7 +165,7 @@ func HandleGraph(c *gin.Context) {
 	// 先获取时间链
 	timeline, err := agentManager.generateTimeline(ctx, keyword, mode)
 	if err != nil {
-		fmt.Printf("[Controller] 获取时间链失败: %v\n", err)
+		logutil.LogError("获取时间链失败: %v", err)
 		data := mockGraph(keyword)
 		c.JSON(http.StatusOK, data)
 		return
@@ -172,7 +174,7 @@ func HandleGraph(c *gin.Context) {
 	// 再生成图谱
 	graph, err := agentManager.generateGraph(ctx, keyword, timeline, mode)
 	if err != nil {
-		fmt.Printf("[Controller] 生成图谱失败: %v\n", err)
+		logutil.LogError("生成图谱失败: %v", err)
 		data := mockGraph(keyword)
 		c.JSON(http.StatusOK, data)
 		return

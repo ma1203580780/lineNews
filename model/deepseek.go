@@ -3,8 +3,9 @@ package model
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
+
+	"lineNews/agent/logutil"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	"github.com/cloudwego/eino/schema"
@@ -154,15 +155,12 @@ func SendMessageWithHistory(ctx context.Context, chatModel *deepseek.ChatModel, 
 // LogDSChatResponse 打印响应信息
 func LogDSChatResponse(response *DSChatResponse) {
 	if response == nil {
-		log.Println("响应为空")
+		logutil.LogInfo("响应为空")
 		return
 	}
 
-	fmt.Printf("AI 响应: %s\n", response.Content)
+	logutil.LogInfo("AI 响应: %s", response.Content)
 	if response.TotalTokens > 0 {
-		fmt.Printf("\nToken 使用统计:\n")
-		fmt.Printf("  输入 Token: %d\n", response.PromptTokens)
-		fmt.Printf("  输出 Token: %d\n", response.CompletionTokens)
-		fmt.Printf("  总计 Token: %d\n", response.TotalTokens)
+		logutil.LogInfo("Token 使用统计:\n  输入 Token: %d\n  输出 Token: %d\n  总计 Token: %d", response.PromptTokens, response.CompletionTokens, response.TotalTokens)
 	}
 }

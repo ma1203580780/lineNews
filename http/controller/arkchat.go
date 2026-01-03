@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
+
+	"lineNews/agent/logutil"
 
 	"github.com/gin-gonic/gin"
 )
@@ -72,7 +73,7 @@ func HandleArkChat(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[Controller] Ark Chat 请求: %s", message)
+	logutil.LogInfo("Ark Chat 请求: %s", message)
 
 	// 从环境变量获取配置
 	apiKey := os.Getenv("ARK_API_KEY")
@@ -106,7 +107,7 @@ func HandleArkChat(c *gin.Context) {
 	// 序列化请求体
 	reqBody, err := json.Marshal(requestBody)
 	if err != nil {
-		log.Printf("[Controller] 序列化请求体失败: %v", err)
+		logutil.LogError("序列化请求体失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("序列化请求体失败: %v", err),
 		})
@@ -116,7 +117,7 @@ func HandleArkChat(c *gin.Context) {
 	// 创建HTTP请求
 	req, err := http.NewRequest("POST", "https://ark.cn-beijing.volces.com/api/v3/chat/completions", bytes.NewBuffer(reqBody))
 	if err != nil {
-		log.Printf("[Controller] 创建HTTP请求失败: %v", err)
+		logutil.LogError("创建HTTP请求失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("创建HTTP请求失败: %v", err),
 		})
@@ -131,7 +132,7 @@ func HandleArkChat(c *gin.Context) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("[Controller] 发送请求失败: %v", err)
+		logutil.LogError("发送请求失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("发送请求失败: %v", err),
 		})
@@ -142,7 +143,7 @@ func HandleArkChat(c *gin.Context) {
 	// 读取响应体
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("[Controller] 读取响应失败: %v", err)
+		logutil.LogError("读取响应失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("读取响应失败: %v", err),
 		})
@@ -151,7 +152,7 @@ func HandleArkChat(c *gin.Context) {
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[Controller] API请求失败，状态码: %d, 响应: %s", resp.StatusCode, string(respBody))
+		logutil.LogError("API请求失败，状态码: %d, 响应: %s", resp.StatusCode, string(respBody))
 		c.JSON(resp.StatusCode, gin.H{
 			"error":   fmt.Sprintf("API请求失败，状态码: %d", resp.StatusCode),
 			"details": string(respBody),
@@ -162,7 +163,7 @@ func HandleArkChat(c *gin.Context) {
 	// 解析响应
 	var apiResp ArkResponse
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		log.Printf("[Controller] 解析响应失败: %v", err)
+		logutil.LogError("解析响应失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("解析响应失败: %v", err),
 		})

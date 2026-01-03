@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+
+	"lineNews/agent/logutil"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	"github.com/cloudwego/eino/schema"
@@ -69,9 +70,9 @@ func (c *StreamLLMCaller) CallWithPromptStream(
 		return err
 	}
 
-	log.Printf("[StreamLLMCaller] %s阶段 System Prompt:\n%s", stage, systemPrompt)
-	log.Printf("[StreamLLMCaller] %s阶段 User Prompt:\n%s", stage, userPrompt)
-	log.Printf("[StreamLLMCaller] 正在调用LLM: %s", stage)
+	logutil.LogInfo("%s阶段 System Prompt:\n%s", stage, systemPrompt)
+	logutil.LogInfo("%s阶段 User Prompt:\n%s", stage, userPrompt)
+	logutil.LogInfo("正在调用LLM: %s", stage)
 
 	// 调用模型
 	response, err := c.chatModel.Generate(ctx, messages)
@@ -85,7 +86,7 @@ func (c *StreamLLMCaller) CallWithPromptStream(
 		return fmt.Errorf("LLM调用失败: %w", err)
 	}
 
-	log.Printf("[StreamLLMCaller] %s阶段 AI 响应: %s", stage, response.Content)
+	logutil.LogInfo("%s阶段 AI 响应: %s", stage, response.Content)
 
 	// 发送结果
 	resultEvent := StreamEvent{

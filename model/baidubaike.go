@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
+
+	"lineNews/agent/logutil"
 )
 
 // API官方文档：https://cloud.baidu.com/doc/qianfan/s/bmh4stpbh
@@ -16,10 +17,10 @@ func baikedemo() {
 	// 方式1: 使用简化接口(默认配置)
 	response, err := BaiduBaikeSearchSimple("刘德华")
 	if err != nil {
-		fmt.Printf("搜索失败: %v\n", err)
+		logutil.LogInfo("搜索失败: %v", err)
 		return
 	}
-	fmt.Printf("搜索成功:\n%s\n", response.RawResponse)
+	logutil.LogInfo("搜索成功:\n%s", response.RawResponse)
 
 	// 方式2: 使用自定义配置
 	// customOptions := &BaiduBaikeRequest{
@@ -213,7 +214,7 @@ func (c *BaiduBaikeClient) Search(req *BaiduBaikeRequest) (*BaiduBaikeResponse, 
 	if err != nil {
 		return nil, err
 	}
-	log.Println("Response:", string(body))
+	logutil.LogInfo("Response: %s", string(body))
 
 	// 3. 解析响应
 	return c.parseResponse(body)

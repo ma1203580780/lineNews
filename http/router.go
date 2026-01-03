@@ -24,7 +24,7 @@ func SetupRouter() *gin.Engine {
 		api.Use(middleware.CORSMiddleware())
 		api.Use(middleware.GlobalRateLimiter.Limit())
 
-		// 基础服务路由
+		// 功能路由
 		api.GET("/health", controller.HandleHealthCheck)             // 健康检查
 		api.GET("/timeline", controller.HandleTimeline)              // 时间链
 		api.GET("/timeline/stream", controller.HandleTimelineStream) // 时间链流式
