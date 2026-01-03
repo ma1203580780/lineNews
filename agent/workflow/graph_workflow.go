@@ -10,6 +10,22 @@ import (
 	"lineNews/agent/tool"
 )
 
+// Event 事件数据结构（workflow包中的定义）
+type Event struct {
+	ID       string   `json:"id"`
+	Title    string   `json:"title"`
+	Time     string   `json:"time"`
+	Location string   `json:"location"`
+	People   []string `json:"people"`
+	Summary  string   `json:"summary"`
+}
+
+// TimelineResponse 时间链响应（workflow包中的定义）
+type TimelineResponse struct {
+	Keyword string  `json:"keyword"`
+	Events  []Event `json:"events"`
+}
+
 // GraphResponse 图谱响应结构（从types.go复制）
 type GraphResponse struct {
 	Keyword string      `json:"keyword"`

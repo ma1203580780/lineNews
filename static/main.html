@@ -73,24 +73,6 @@
         #graphBtn:hover {
             background-color: #eebb69;
         }
-        .mode-selector {
-            padding: 6px 10px;
-            border-radius: 4px;
-            border: 1px solid #dcdfe6;
-            background-color: #fff;
-            color: #606266;
-            cursor: pointer;
-            font-size: 12px;
-            margin-right: 12px;
-        }
-        .mode-selector:hover {
-            border-color: #b3d8ff;
-        }
-        .mode-selector:focus {
-            outline: none;
-            border-color: #409eff;
-            box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
-        }
         .hint {
             padding: 8px 20px;
             font-size: 13px;
@@ -388,11 +370,6 @@
         <div class="title">LineNews</div>
         <div class="controls">
             <input id="keywordInput" type="text" placeholder="输入新闻关键词，例如：人工智能" />
-            <select id="modeSelector" class="mode-selector">
-                <option value="fast" selected>Fast</option>
-                <option value="deepsearch">DeepSearch</option>
-                <option value="balanced">均衡</option>
-            </select>
             <button id="timelineBtn">时间线</button>
             <button id="graphBtn">知识图谱</button>
         </div>
@@ -423,15 +400,6 @@
         const origin = window.location.origin;
         const API_BASE = (!origin || origin === 'null' || origin.startsWith('file:')) ? 'http://localhost:8080' : origin;
         
-        // 模式选择相关
-        const modeSelector = document.getElementById('modeSelector');
-        let selectedMode = 'fast'; // 默认模式
-        
-        // 为模式下拉框添加选择事件
-        modeSelector.addEventListener('change', function() {
-            selectedMode = this.value;
-            console.log('选中模式:', selectedMode);
-        });
 
         // 显示加载状态
         function showLoading() {
@@ -466,94 +434,18 @@
         function loadTimeline(keyword) {
             showLoading();
             
-            // 创建思考过程显示区域
-            const thinkingContainer = document.createElement('div');
-            thinkingContainer.id = 'thinking-container';
-            thinkingContainer.style.cssText = `
-                padding: 16px;
-                margin-bottom: 16px;
-                background-color: #f0f9ff;
-                border: 1px solid #b3d8ff;
-                border-radius: 4px;
-                max-height: 200px;
-                overflow-y: auto;
-            `;
             timelineContainer.innerHTML = '';
-            timelineContainer.appendChild(thinkingContainer);
             
             resultTitle.textContent = '时间线生成中...';
             resultSubtitle.textContent = '正在生成时间链，请稍候';
             
-            // 使用 SSE 连接获取流式数据
-            const eventSource = new EventSource(`${API_BASE}/api/timeline/stream?keyword=${encodeURIComponent(keyword)}&mode=${selectedMode}`);
-            
-            eventSource.onmessage = function(event) {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    if (data.type === 'thinking') {
-                        // 添加思考过程到显示区域
-                        const thinkingDiv = document.createElement('div');
-                        thinkingDiv.style.cssText = `
-                            padding: 8px 0;
-                            border-bottom: 1px solid #ebeef5;
-                            font-size: 14px;
-                        `;
-                        thinkingDiv.innerHTML = `<span style="color: #409eff; font-weight: 500;">[思考] </span>${data.content}`;
-                        thinkingContainer.appendChild(thinkingDiv);
-                        
-                        // 滚动到底部
-                        thinkingContainer.scrollTop = thinkingContainer.scrollHeight;
-                    } else if (data.type === 'result') {
-                        // 收到最终结果，渲染时间线
-                        renderTimeline(data.content);
-                        
-                        // 更新标题
-                        resultTitle.textContent = '时间线视图';
-                        resultSubtitle.textContent = '按时间顺序展示链式新闻事件';
-                        
-                        // 移除思考过程容器，让时间线正常显示
-                        thinkingContainer.remove();
-                    } else if (data.type === 'error') {
-                        // 显示错误信息
-                        const errorDiv = document.createElement('div');
-                        errorDiv.style.cssText = `
-                            padding: 8px;
-                            color: #f56c6c;
-                            font-weight: 500;
-                        `;
-                        errorDiv.textContent = `错误: ${data.content}`;
-                        thinkingContainer.appendChild(errorDiv);
-                        
-                        // 滚动到底部
-                        thinkingContainer.scrollTop = thinkingContainer.scrollHeight;
-                    } else if (data.type === 'done') {
-                        // 完成时更新状态
-                        resultSubtitle.textContent = '时间链生成完成';
-                    }
-                } catch (e) {
-                    console.error('解析SSE数据失败:', e);
-                }
-            };
-            
-            eventSource.onerror = function(err) {
-                console.error('SSE连接错误:', err);
-                eventSource.close();
-                
-                // 错误处理
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'timeline-empty';
-                errorDiv.textContent = 'SSE连接失败，正在尝试普通请求...';
-                thinkingContainer.appendChild(errorDiv);
-                
-                // 如果SSE失败，回退到普通请求
-                fallbackToNormalRequest(keyword);
-            };
+            // 使用普通请求获取数据（流式功能已移除）
+            fallbackToNormalRequest(keyword);
         }
         
         // SSE失败时回退到普通请求
         function fallbackToNormalRequest(keyword) {
-            fetch(`${API_BASE}/api/timeline?keyword=${encodeURIComponent(keyword)}&mode=${selectedMode}`)
+            fetch(`${API_BASE}/api/timeline?keyword=${encodeURIComponent(keyword)}`)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error('网络请求失败');

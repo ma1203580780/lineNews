@@ -25,10 +25,9 @@ func SetupRouter() *gin.Engine {
 		api.Use(middleware.GlobalRateLimiter.Limit())
 
 		// 功能路由
-		api.GET("/health", controller.HandleHealthCheck)             // 健康检查
-		api.GET("/timeline", controller.HandleTimeline)              // 时间链
-		api.GET("/timeline/stream", controller.HandleTimelineStream) // 时间链流式
-		api.GET("/graph", controller.HandleGraph)                    // 知识图谱
+		api.GET("/health", controller.HandleHealthCheck) // 健康检查
+		api.GET("/timeline", controller.HandleTimeline)  // 时间链
+		api.GET("/graph", controller.HandleGraph)        // 知识图谱
 
 		// 百度深度搜索路由
 		api.GET("/deepsearch/search", controller.HandleDeepSearch)        // GET /api/deepsearch/search?query=xxx
@@ -42,8 +41,7 @@ func SetupRouter() *gin.Engine {
 		api.GET("/ark/chat", controller.HandleArkChat) // GET /api/ark/chat?message=xxx
 
 		// DeepSeek 路由
-		api.GET("/deepseek/chat", controller.HandleDeepSeekChat)         // GET /api/deepseek/chat?message=xxx
-		api.GET("/deepseek/stream", controller.HandleDeepSeekChatStream) // GET /api/deepseek/stream?message=xxx
+		api.GET("/deepseek/chat", controller.HandleDeepSeekChat) // GET /api/deepseek/chat?message=xxx
 	}
 
 	return r

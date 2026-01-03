@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"lineNews/agent"
 	"lineNews/agent/logutil"
-	"lineNews/agent/tool"
 	"lineNews/config"
+	"lineNews/model"
 
 	"github.com/gin-gonic/gin"
 )
@@ -44,14 +45,75 @@ func InitAgent(ctx context.Context, cfg *config.Config) error {
 
 // generateTimeline 生成时间链
 func (am *AgentManager) generateTimeline(ctx context.Context, keyword string, mode string) (*agent.TimelineResponse, error) {
-	// 生成时间链
-	logutil.LogInfo("开始从 Agent 生成时间链: %s (模式: %s)", keyword, mode)
-	timeline, err := am.agent.GenerateTimelineWithMode(ctx, keyword, mode)
-	if err != nil {
-		return nil, err
+	// 直接调用Ark模型生成时间链
+	logutil.LogInfo("开始从 Ark 模型生成时间链: %s (模式: %s)", keyword, mode)
+
+	// 从环境变量获取配置
+	arkAPIKey := os.Getenv("ARK_API_KEY")
+	if arkAPIKey == "" {
+		return nil, fmt.Errorf("ARK_API_KEY 环境变量未设置")
 	}
 
-	return timeline, nil
+	arkModelID := os.Getenv("ARK_MODEL_ID")
+	if arkModelID == "" {
+		arkModelID = model.DefaultArkModel
+	}
+
+	// 构建用户请求
+	userPrompt := fmt.Sprintf("请为关键词 '%s' 生成新闻时间线，返回有效的JSON格式结果，包含Keyword和Events字段。Events数组应包含至少5-10个独立的新闻事件，每个事件必须包含以下字段：ID（字符串类型，如\"1\", \"2\", \"3\"等）、Title（字符串，事件标题）、Time（字符串，具体时间如\"2024-01-15\"）、Location（字符串，地点）、People（字符串数组，涉及人物）、Summary（字符串，事件摘要）。确保时间线覆盖不同时间段，从早期到近期，每个事件都应有明确的时间、地点、人物和内容。", keyword)
+
+	// 调用Ark模型
+	response, err := model.SendArkMessage(ctx, arkModelID, userPrompt, "你是一个专业的新闻时间线生成助手。")
+	if err != nil {
+		return nil, fmt.Errorf("调用Ark模型失败: %w", err)
+	}
+
+	// 解析返回的JSON
+	var timeline agent.TimelineResponse
+	if err := json.Unmarshal([]byte(response.Content), &timeline); err != nil {
+		// 如果直接解析失败，尝试从响应中提取JSON部分
+		logutil.LogInfo("直接解析JSON失败，尝试提取: %v", err)
+		jsonStart := findJSONStart(response.Content)
+		if jsonStart != -1 {
+			jsonContent := response.Content[jsonStart:]
+			if err := json.Unmarshal([]byte(jsonContent), &timeline); err == nil {
+				logutil.LogInfo("成功提取并解析JSON")
+			} else {
+				logutil.LogInfo("提取JSON后仍解析失败: %v", err)
+				// 如果JSON解析失败，创建一个基本的响应
+				timeline = agent.TimelineResponse{
+					Keyword: keyword,
+					Events: []agent.Event{
+						{
+							ID:       "1",
+							Title:    fmt.Sprintf("%s 相关事件", keyword),
+							Time:     "2024-01-01",
+							Location: "未知地点",
+							People:   []string{"未知人物"},
+							Summary:  response.Content,
+						},
+					},
+				}
+			}
+		} else {
+			// 如果找不到JSON，创建一个基本的响应
+			timeline = agent.TimelineResponse{
+				Keyword: keyword,
+				Events: []agent.Event{
+					{
+						ID:       "1",
+						Title:    fmt.Sprintf("%s 相关事件", keyword),
+						Time:     "2024-01-01",
+						Location: "未知地点",
+						People:   []string{"未知人物"},
+						Summary:  response.Content,
+					},
+				},
+			}
+		}
+	}
+
+	return &timeline, nil
 }
 
 // generateGraph 生成知识图谱
@@ -78,6 +140,14 @@ func HandleTimeline(c *gin.Context) {
 		mode = "fast" // 默认模式
 	}
 
+	// 检查是否需要流式响应
+	stream := c.Query("stream")
+	if stream == "true" || stream == "1" {
+		// 使用流式响应
+		HandleTimelineStream(c)
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	// 使用 Agent 生成时间链
@@ -97,14 +167,13 @@ func HandleTimeline(c *gin.Context) {
 func HandleTimelineStream(c *gin.Context) {
 	keyword := c.Query("keyword")
 	if keyword == "" {
-		keyword = "新闻"
+		c.JSON(http.StatusOK, gin.H{"error": "keyword query parameter is required"})
+		return
 	}
 	mode := c.Query("mode")
 	if mode == "" {
 		mode = "fast" // 默认模式
 	}
-
-	ctx := c.Request.Context()
 
 	// 设置 SSE 响应头
 	c.Header("Content-Type", "text/event-stream")
@@ -112,41 +181,105 @@ func HandleTimelineStream(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 	c.Header("Access-Control-Allow-Origin", "*")
 
-	// 创建发送事件的函数
-	sendEvent := func(event tool.StreamEvent) error {
-		// 将事件序列化为JSON
-		data, err := json.Marshal(event)
-		if err != nil {
-			return err
-		}
+	ctx := c.Request.Context()
 
-		// 发送SSE事件
-		_, err = c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", data)))
-		if err != nil {
-			return err
-		}
+	// 发送开始事件
+	c.SSEvent("start", gin.H{"message": "开始生成时间链", "keyword": keyword})
+	c.Writer.Flush()
 
-		// 立即刷新响应
-		c.Writer.Flush()
+	// 直接调用Ark模型生成时间链（流式版本）
+	logutil.LogInfo("开始从 Ark 模型生成时间链（流式）: %s (模式: %s)", keyword, mode)
 
-		return nil
-	}
-
-	// 使用 Agent 流式生成时间链，根据模式选择
-	_, err := agentManager.agent.GenerateTimelineStreamWithMode(ctx, keyword, mode, sendEvent)
-	if err != nil {
-		logutil.LogError("流式生成时间链失败: %v", err)
-		// 发送错误事件
-		errorEvent := tool.StreamEvent{
-			Type:    "error",
-			Content: fmt.Sprintf("生成时间链失败: %v", err),
-			Stage:   "总览",
-		}
-		data, _ := json.Marshal(errorEvent)
-		c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", data)))
+	// 从环境变量获取配置
+	arkAPIKey := os.Getenv("ARK_API_KEY")
+	if arkAPIKey == "" {
+		logutil.LogError("ARK_API_KEY 环境变量未设置")
+		c.SSEvent("error", gin.H{"error": "ARK_API_KEY 环境变量未设置"})
 		c.Writer.Flush()
 		return
 	}
+
+	arkModelID := os.Getenv("ARK_MODEL_ID")
+	if arkModelID == "" {
+		arkModelID = model.DefaultArkModel
+	}
+
+	// 构建用户请求
+	userPrompt := fmt.Sprintf("请为关键词 '%s' 生成新闻时间线，返回有效的JSON格式结果，包含Keyword和Events字段。Events数组应包含至少5-10个独立的新闻事件，每个事件必须包含以下字段：ID（字符串类型，如\"1\", \"2\", \"3\"等）、Title（字符串，事件标题）、Time（字符串，具体时间如\"2024-01-15\"）、Location（字符串，地点）、People（字符串数组，涉及人物）、Summary（字符串，事件摘要）。确保时间线覆盖不同时间段，从早期到近期，每个事件都应有明确的时间、地点、人物和内容。", keyword)
+
+	// 发送思考过程
+	c.SSEvent("thinking", gin.H{"message": "正在分析关键词并规划时间线生成"})
+	c.Writer.Flush()
+
+	// 调用Ark模型
+	response, err := model.SendArkMessage(ctx, arkModelID, userPrompt, "你是一个专业的新闻时间线生成助手。")
+	if err != nil {
+		logutil.LogError("调用Ark模型失败: %v", err)
+		c.SSEvent("error", gin.H{"error": fmt.Sprintf("调用Ark模型失败: %v", err)})
+		c.Writer.Flush()
+		// 返回 mock 数据
+		data := mockTimeline(keyword)
+		c.SSEvent("data", data)
+		c.Writer.Flush()
+		return
+	}
+
+	// 发送处理中事件
+	c.SSEvent("processing", gin.H{"message": "正在解析模型响应"})
+	c.Writer.Flush()
+
+	// 解析返回的JSON
+	var timeline agent.TimelineResponse
+	if err := json.Unmarshal([]byte(response.Content), &timeline); err != nil {
+		// 如果直接解析失败，尝试从响应中提取JSON部分
+		logutil.LogInfo("直接解析JSON失败，尝试提取: %v", err)
+		jsonStart := findJSONStart(response.Content)
+		if jsonStart != -1 {
+			jsonContent := response.Content[jsonStart:]
+			if err := json.Unmarshal([]byte(jsonContent), &timeline); err == nil {
+				logutil.LogInfo("成功提取并解析JSON")
+			} else {
+				logutil.LogInfo("提取JSON后仍解析失败: %v", err)
+				// 如果JSON解析失败，创建一个基本的响应
+				timeline = agent.TimelineResponse{
+					Keyword: keyword,
+					Events: []agent.Event{
+						{
+							ID:       "1",
+							Title:    fmt.Sprintf("%s 相关事件", keyword),
+							Time:     "2024-01-01",
+							Location: "未知地点",
+							People:   []string{"未知人物"},
+							Summary:  response.Content,
+						},
+					},
+				}
+			}
+		} else {
+			// 如果找不到JSON，创建一个基本的响应
+			timeline = agent.TimelineResponse{
+				Keyword: keyword,
+				Events: []agent.Event{
+					{
+						ID:       "1",
+						Title:    fmt.Sprintf("%s 相关事件", keyword),
+						Time:     "2024-01-01",
+						Location: "未知地点",
+						People:   []string{"未知人物"},
+						Summary:  response.Content,
+					},
+				},
+			}
+		}
+	}
+
+	// 发送最终数据
+	c.SSEvent("data", timeline)
+	c.Writer.Flush()
+
+	// 发送完成事件
+	c.SSEvent("complete", gin.H{"message": "时间链生成完成"})
+	c.Writer.Flush()
 }
 
 // HandleGraph 处理知识图谱请求
@@ -251,4 +384,16 @@ func mockGraph(keyword string) agent.GraphResponse {
 		Nodes:   nodes,
 		Links:   links,
 	}
+}
+
+// findJSONStart 查找内容中的 JSON 起始位置
+func findJSONStart(content string) int {
+	start := -1
+	for i, char := range content {
+		if char == '{' || char == '[' {
+			start = i
+			break
+		}
+	}
+	return start
 }

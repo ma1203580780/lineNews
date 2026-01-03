@@ -27,12 +27,18 @@ type ArkChatResponse struct {
 	TotalTokens      int
 }
 
+// Tool 定义工具结构
+type Tool struct {
+	Type string `json:"type"`
+}
+
 // ArkRequestModel API请求结构
 type ArkRequestModel struct {
 	Model               string         `json:"model"`
 	MaxCompletionTokens int            `json:"max_completion_tokens,omitempty"`
 	Messages            []MessageModel `json:"messages"`
 	ReasoningEffort     string         `json:"reasoning_effort,omitempty"`
+	Tools               []Tool         `json:"tools,omitempty"`
 }
 
 // MessageModel 消息结构
@@ -321,22 +327,6 @@ func SendArkMessageWithHistory(ctx context.Context, modelID string, messages []M
 	}
 
 	return result, nil
-}
-
-// StreamArkMessage 流式发送单条消息到Ark - 由于HTTP方式的限制，这里返回错误
-func StreamArkMessage(ctx context.Context, modelID string, userMessage string, systemMessage string) (<-chan *ArkChatResponse, <-chan error) {
-	responseChan := make(chan *ArkChatResponse)
-	errorChan := make(chan error)
-
-	// 在 goroutine 中返回错误，因为HTTP方式不支持流式响应
-	go func() {
-		defer close(responseChan)
-		defer close(errorChan)
-
-		errorChan <- fmt.Errorf("HTTP方式不支持流式响应，请使用SSE流式接口")
-	}()
-
-	return responseChan, errorChan
 }
 
 // ==================== 工具函数 ====================

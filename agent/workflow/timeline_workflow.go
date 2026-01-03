@@ -10,22 +10,6 @@ import (
 	"lineNews/agent/tool"
 )
 
-// TimelineResponse 时间链响应结构（从types.go复制）
-type TimelineResponse struct {
-	Keyword string  `json:"keyword"`
-	Events  []Event `json:"events"`
-}
-
-// Event 事件数据结构（从types.go复制）
-type Event struct {
-	ID       string   `json:"id"`
-	Title    string   `json:"title"`
-	Time     string   `json:"time"`
-	Location string   `json:"location"`
-	People   []string `json:"people"`
-	Summary  string   `json:"summary"`
-}
-
 // TimelineWorkflow 时间链生成工作流
 type TimelineWorkflow struct {
 	llmCaller *tool.LLMCaller
